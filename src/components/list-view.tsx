@@ -91,6 +91,69 @@ export function ListView({
 
   const progress = items.length === 0 ? 0 : Math.round((displayedChecked.size / items.length) * 100);
 
+  function renderItem(item: ShoppingListItem) {
+    const isChecked = displayedChecked.has(item.id);
+    const content = (
+      <div className="flex items-center gap-3 w-full">
+        {mode === "shopping" && (
+          <CircleCheck checked={isChecked} reduced={!!reduced} />
+        )}
+        <QuantityBadge
+          value={item.quantityValue}
+          unit={item.quantityUnit}
+          dimmed={isChecked}
+        />
+        <span className="flex-1 min-w-0">
+          <span
+            className={cn(
+              "font-medium block truncate transition-all duration-200",
+              isChecked && "line-through text-muted-foreground",
+            )}
+          >
+            {item.productName}
+          </span>
+          {item.notes && (
+            <span
+              className={cn(
+                "block text-xs italic text-muted-foreground/90 mt-0.5",
+                isChecked && "line-through opacity-70",
+              )}
+            >
+              💬 {item.notes}
+            </span>
+          )}
+        </span>
+      </div>
+    );
+
+    return (
+      <motion.li
+        key={item.id}
+        layout
+        initial={reduced ? false : { opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        {mode === "shopping" ? (
+          <button
+            type="button"
+            onClick={() => toggle(item.id)}
+            className={cn(
+              "w-full rounded-2xl border border-border/70 bg-card px-3.5 py-2 text-left shadow-soft transition-all duration-200 hover:border-primary/40 hover:shadow-glow active:scale-[0.99]",
+              isChecked && "bg-muted/50 border-border/50 shadow-none",
+            )}
+          >
+            {content}
+          </button>
+        ) : (
+          <div className="w-full rounded-2xl border border-border/70 bg-card px-3.5 py-2 shadow-soft">
+            {content}
+          </div>
+        )}
+      </motion.li>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {mode === "shopping" && (
@@ -146,7 +209,7 @@ export function ListView({
             <li key={`store-${store.storeId ?? store.storeName}`}>
               <SectionHeading
                 title={store.storeName}
-                eyebrow={`${store.categories.reduce((acc, c) => acc + c.items.length, 0)} productos`}
+                eyebrow={`${store.directItems.length + store.categories.reduce((acc, c) => acc + c.items.length, 0)} productos`}
                 illustration={
                   <div
                     className={cn(
@@ -167,6 +230,13 @@ export function ListView({
                 </p>
               )}
               <div className="space-y-5 pl-1">
+                {store.directItems.length > 0 && (
+                  <ul className="space-y-2">
+                    <AnimatePresence initial={false}>
+                      {store.directItems.map((item) => renderItem(item))}
+                    </AnimatePresence>
+                  </ul>
+                )}
                 {store.categories.map((cat) => (
                   <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
                     <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mb-2">
@@ -175,68 +245,7 @@ export function ListView({
                     </div>
                     <ul className="space-y-2">
                       <AnimatePresence initial={false}>
-                        {cat.items.map((item) => {
-                          const isChecked = displayedChecked.has(item.id);
-                          const content = (
-                            <div className="flex items-center gap-3 w-full">
-                              {mode === "shopping" && (
-                                <CircleCheck checked={isChecked} reduced={!!reduced} />
-                              )}
-                              <QuantityBadge
-                                value={item.quantityValue}
-                                unit={item.quantityUnit}
-                                dimmed={isChecked}
-                              />
-                              <span className="flex-1 min-w-0">
-                                <span
-                                  className={cn(
-                                    "font-medium block truncate transition-all duration-200",
-                                    isChecked && "line-through text-muted-foreground",
-                                  )}
-                                >
-                                  {item.productName}
-                                </span>
-                                {item.notes && (
-                                  <span
-                                    className={cn(
-                                      "block text-xs italic text-muted-foreground/90 mt-0.5",
-                                      isChecked && "line-through opacity-70",
-                                    )}
-                                  >
-                                    💬 {item.notes}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          );
-
-                          return (
-                            <motion.li
-                              key={item.id}
-                              layout
-                              initial={reduced ? false : { opacity: 0, y: 4 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              {mode === "shopping" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => toggle(item.id)}
-                                  className={cn(
-                                    "w-full rounded-2xl border border-border/70 bg-card px-3.5 py-2 text-left shadow-soft transition-all duration-200 hover:border-primary/40 hover:shadow-glow active:scale-[0.99]",
-                                    isChecked && "bg-muted/50 border-border/50 shadow-none",
-                                  )}
-                                >
-                                  {content}
-                                </button>
-                              ) : (
-                                <div className="w-full rounded-2xl border border-border/70 bg-card px-3.5 py-2 shadow-soft">
-                                  {content}
-                                </div>
-                              )}
-                            </motion.li>
-                          );
-                        })}
+                        {cat.items.map((item) => renderItem(item))}
                       </AnimatePresence>
                     </ul>
                   </div>

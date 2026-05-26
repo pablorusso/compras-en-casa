@@ -19,6 +19,7 @@ export type GroupedItems = {
   storeName: string;
   storeEmoji: string;
   storeAddress: string | null;
+  directItems: ShoppingListItem[];
   categories: {
     categoryId: number | null;
     categoryName: string;
@@ -26,6 +27,12 @@ export type GroupedItems = {
     items: ShoppingListItem[];
   }[];
 }[];
+
+function sortItems(items: ShoppingListItem[]): ShoppingListItem[] {
+  return items.sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.productName.localeCompare(b.productName, "es"),
+  );
+}
 
 export function filterItemsByQuery(
   items: ShoppingListItem[],
@@ -44,6 +51,7 @@ export function groupItems(items: ShoppingListItem[]): GroupedItems {
       storeName: string;
       storeEmoji: string;
       storeAddress: string | null;
+      directs: ShoppingListItem[];
       cats: Map<
         string,
         {
@@ -65,16 +73,21 @@ export function groupItems(items: ShoppingListItem[]): GroupedItems {
         storeName: item.storeName ?? "Sin comercio",
         storeEmoji: item.storeEmoji ?? "🛒",
         storeAddress: item.storeAddress ?? null,
+        directs: [],
         cats: new Map(),
       };
       stores.set(storeKey, store);
     }
-    const catKey = String(item.categoryId ?? `n:${item.categoryName ?? "Otros"}`);
+    if (!item.categoryName) {
+      store.directs.push(item);
+      continue;
+    }
+    const catKey = String(item.categoryId ?? `n:${item.categoryName}`);
     let cat = store.cats.get(catKey);
     if (!cat) {
       cat = {
         categoryId: item.categoryId,
-        categoryName: item.categoryName ?? "Otros",
+        categoryName: item.categoryName,
         categoryEmoji: item.categoryEmoji ?? "🛒",
         items: [],
       };
@@ -88,11 +101,10 @@ export function groupItems(items: ShoppingListItem[]): GroupedItems {
     storeName: s.storeName,
     storeEmoji: s.storeEmoji,
     storeAddress: s.storeAddress,
+    directItems: sortItems(s.directs),
     categories: Array.from(s.cats.values()).map((c) => ({
       ...c,
-      items: c.items.sort(
-        (a, b) => a.sortOrder - b.sortOrder || a.productName.localeCompare(b.productName, "es"),
-      ),
+      items: sortItems(c.items),
     })),
   }));
 }
@@ -117,6 +129,14 @@ export function buildMarkdownText(
       lines.push(`📍 ${store.storeAddress}`);
     }
     lines.push("");
+    for (const item of store.directItems) {
+      const qty = formatQuantity(item.quantityValue, item.quantityUnit);
+      const note = item.notes ? ` _(${item.notes})_` : "";
+      lines.push(`- [ ] ${item.productName} — ${qty}${note}`);
+    }
+    if (store.directItems.length > 0) {
+      lines.push("");
+    }
     for (const cat of store.categories) {
       lines.push(`### ${cat.categoryEmoji} ${cat.categoryName}`);
       lines.push("");

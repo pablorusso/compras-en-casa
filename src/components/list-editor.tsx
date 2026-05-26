@@ -264,6 +264,30 @@ export function ListEditor({
                 </div>
                 {!storeCollapsed && (
                   <div className="space-y-3 mt-2">
+                    {store.directItems.length > 0 && (
+                      <ul className="space-y-1.5">
+                        <AnimatePresence initial={false}>
+                          {store.directItems.map((item) => (
+                            <motion.li
+                              key={item.id}
+                              layout
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, height: 0, scale: 0.96 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <ListItemRow
+                                item={item}
+                                activeEditor={activeEditor}
+                                requestEdit={requestEdit}
+                                clearEditor={clearEditor}
+                                registerCommit={registerCommit}
+                              />
+                            </motion.li>
+                          ))}
+                        </AnimatePresence>
+                      </ul>
+                    )}
                     {store.categories.map((cat) => {
                       const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
                       const catCollapsed = isSearching ? false : collapsedCats.has(cKey);
