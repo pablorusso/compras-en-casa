@@ -39,7 +39,7 @@ import {
   type AvailableProduct,
 } from "@/components/add-product-drawer";
 import { getStoreStyle } from "@/lib/store-style";
-import { groupItems } from "@/lib/format";
+import { groupItems, toEditQuantity } from "@/lib/format";
 import { ListFilterSelects } from "@/components/list-filter-selects";
 import { useListFilters } from "@/lib/use-list-filters";
 import { isCanonicalUnit, stepQuantity, UNIT_PICKER_GRID, unitDisplay, type CanonicalUnit } from "@/lib/units";
@@ -451,7 +451,7 @@ function ListItemRow({
     : "unidad";
   const initialNotes = item.notes ?? "";
 
-  const [value, setValue] = useState(item.quantityValue);
+  const [value, setValue] = useState(toEditQuantity(item.quantityValue));
   const [unit, setUnit] = useState<CanonicalUnit>(initialUnit);
   const [notesDraft, setNotesDraft] = useState(initialNotes);
   const [pending, startTransition] = useTransition();
@@ -459,6 +459,13 @@ function ListItemRow({
   const valueRef = useRef(value);
   const unitRef = useRef(unit);
   const notesDraftRef = useRef(notesDraft);
+  const qtyInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (isEditingQty) {
+      qtyInputRef.current?.focus();
+      qtyInputRef.current?.select();
+    }
+  }, [isEditingQty]);
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
@@ -490,7 +497,7 @@ function ListItemRow({
   function save() {
     const fd = new FormData();
     fd.set("id", String(item.id));
-    fd.set("quantityValue", value);
+    fd.set("quantityValue", toEditQuantity(value));
     fd.set("quantityUnit", unit);
     startTransition(async () => {
       try {
@@ -526,7 +533,7 @@ function ListItemRow({
   }
 
   function cancelQtyEdit() {
-    setValue(item.quantityValue);
+    setValue(toEditQuantity(item.quantityValue));
     setUnit(initialUnit);
     clearEditor();
   }
@@ -537,7 +544,7 @@ function ListItemRow({
   }
 
   function startQtyEdit() {
-    setValue(item.quantityValue);
+    setValue(toEditQuantity(item.quantityValue));
     setUnit(initialUnit);
     requestEdit(item.id, "qty");
   }
@@ -554,7 +561,7 @@ function ListItemRow({
     return registerCommit(key, () => {
       const v = valueRef.current;
       const u = unitRef.current;
-      if (v === item.quantityValue && u === initialUnit) return;
+      if (v === toEditQuantity(item.quantityValue) && u === initialUnit) return;
       const fd = new FormData();
       fd.set("id", String(item.id));
       fd.set("quantityValue", v);
@@ -636,12 +643,12 @@ function ListItemRow({
             <div className="mt-1 space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <Input
+                  ref={qtyInputRef}
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   type="number"
                   inputMode="decimal"
                   step="0.01"
-                  autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -651,7 +658,7 @@ function ListItemRow({
                       cancelQtyEdit();
                     }
                   }}
-                  className="h-8 w-20 text-sm"
+                  className="h-8 flex-1 text-sm"
                 />
                 <Button size="sm" className="h-8" onClick={save} disabled={pending}>
                   OK

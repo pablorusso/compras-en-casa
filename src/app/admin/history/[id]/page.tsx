@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { ChevronLeft } from "lucide-react";
@@ -9,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
 import { CloneListButton } from "@/components/clone-list-button";
 import { CopyListButton } from "@/components/copy-list-button";
+import { PrintListButton } from "@/components/print-list-button";
 import { HeroBasket } from "@/components/illustrations";
 
 const dateFmt: Intl.DateTimeFormatOptions = {
@@ -17,6 +19,24 @@ const dateFmt: Intl.DateTimeFormatOptions = {
 };
 
 type Params = { id: string };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const listId = Number(id);
+  if (!Number.isInteger(listId)) return { title: "Compras en Casa" };
+  const [list] = await db
+    .select()
+    .from(shoppingLists)
+    .where(eq(shoppingLists.id, listId))
+    .limit(1);
+  return {
+    title: list ? `Compras en Casa - ${list.name}` : "Compras en Casa",
+  };
+}
 
 export default async function HistoryDetailPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
@@ -53,7 +73,10 @@ export default async function HistoryDetailPage({ params }: { params: Promise<Pa
           </div>
 
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
-            <CopyListButton list={list} items={items} size="lg" />
+            <div className="flex flex-wrap gap-2">
+              <CopyListButton list={list} items={items} size="lg" />
+              <PrintListButton list={list} items={items} size="lg" />
+            </div>
             <CloneListButton
               sourceListId={list.id}
               sourceName={list.name}
@@ -65,7 +88,7 @@ export default async function HistoryDetailPage({ params }: { params: Promise<Pa
         </CardContent>
       </Card>
 
-      <ListView list={list} items={items} mode="view" actionsHeader={false} />
+      <ListView items={items} mode="view" />
     </div>
   );
 }

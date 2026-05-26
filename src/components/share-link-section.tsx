@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RefreshCw, Ban } from "lucide-react";
+import { RefreshCw, Ban, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CopyableLink } from "@/components/copyable-link";
@@ -39,14 +39,14 @@ export function ShareLinkSection({
   }
 
   function expire() {
-    if (!confirm("¿Vencer el link compartible? Quien lo tenga dejará de poder acceder.")) return;
+    if (!confirm("¿Eliminar el link compartible? Quien lo tenga dejará de poder acceder.")) return;
     const fd = new FormData();
     fd.set("listId", String(listId));
     startTransition(async () => {
       try {
         await expireShareLinkAction(fd);
         setInfo(null);
-        toast.success("Link vencido");
+        toast.success("Link eliminado");
       } catch (err) {
         toast.error((err as Error).message);
       }
@@ -65,7 +65,7 @@ export function ShareLinkSection({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-          Link compartible (con vencimiento)
+          Link compartible
         </p>
         <div className="flex items-center gap-1">
           {info && (
@@ -74,11 +74,11 @@ export function ShareLinkSection({
               variant="ghost"
               onClick={expire}
               disabled={pending}
-              aria-label="Vencer link"
+              aria-label="Eliminar link"
               className="text-destructive hover:text-destructive hover:bg-destructive/10"
             >
               <Ban className="size-3.5" />
-              Vencer
+              Eliminar
             </Button>
           )}
           <Button
@@ -94,12 +94,17 @@ export function ShareLinkSection({
         </div>
       </div>
       {info ? (
-        <>
-          <CopyableLink url={url} />
-          {expiresLabel && (
-            <p className="text-[11px] text-muted-foreground">Expira el {expiresLabel}</p>
-          )}
-        </>
+        <CopyableLink
+          url={url}
+          footer={
+            expiresLabel ? (
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Clock className="size-3" />
+                Expira el {expiresLabel}
+              </p>
+            ) : undefined
+          }
+        />
       ) : (
         <p className="rounded-xl border border-dashed bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
           Sin link activo. Generá uno para compartir esta lista por un período acotado.

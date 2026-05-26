@@ -1,16 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { ChevronDown, ChevronRight, Copy, MapPin, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import { Ban, Check, ChevronDown, ChevronRight, MapPin, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ProgressBar } from "@/components/progress-bar";
 import { QuantityBadge } from "@/components/quantity-badge";
 import { SectionHeading } from "@/components/section-heading";
-import { groupItems, buildMarkdownText } from "@/lib/format";
+import { groupItems } from "@/lib/format";
 import { ListFilterSelects } from "@/components/list-filter-selects";
 import { useListFilters } from "@/lib/use-list-filters";
 import { getStoreStyle } from "@/lib/store-style";
@@ -18,9 +17,18 @@ import { useHasMounted } from "@/lib/use-has-mounted";
 import type { ShoppingListItem } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
-const EMPTY_CHECKED: ReadonlySet<number> = new Set<number>();
-
 type Mode = "view" | "shopping";
+type ItemStatus = "bought" | "missing";
+type StatusFilter = "pending" | "bought" | "missing" | "all";
+
+const EMPTY_MARKS: ReadonlyMap<number, ItemStatus> = new Map<number, ItemStatus>();
+
+const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+  { value: "pending", label: "Pendientes" },
+  { value: "bought", label: "Comprados" },
+  { value: "missing", label: "No hay" },
+  { value: "all", label: "Todos" },
+];
 
 function progressEmoji(p: number): string {
   if (p >= 100) return "🎉";
@@ -30,19 +38,40 @@ function progressEmoji(p: number): string {
   return "🥬";
 }
 
+/**
+ * Carga las marcas desde localStorage. Formato nuevo: `{ bought: number[], missing: number[] }`.
+ * Migración hacia atrás: si el JSON guardado es un array (formato viejo solo-comprados),
+ * se interpretan todos esos ids como "comprados".
+ */
+function loadMarks(storageKey?: string, mode?: Mode): Map<number, ItemStatus> {
+  const empty = new Map<number, ItemStatus>();
+  if (typeof window === "undefined" || mode !== "shopping" || !storageKey) return empty;
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return empty;
+    const data = JSON.parse(raw);
+    if (Array.isArray(data)) {
+      for (const id of data) empty.set(Number(id), "bought");
+    } else {
+      for (const id of data.bought ?? []) empty.set(Number(id), "bought");
+      for (const id of data.missing ?? []) empty.set(Number(id), "missing");
+    }
+    return empty;
+  } catch {
+    return empty;
+  }
+}
+
 export function ListView({
-  list,
   items,
   mode = "view",
   storageKey,
-  actionsHeader = true,
 }: {
-  list: { id: number; name: string };
   items: ShoppingListItem[];
   mode?: Mode;
   storageKey?: string;
-  actionsHeader?: boolean;
 }) {
+  const isShopping = mode === "shopping";
   const {
     query,
     setQuery,
@@ -56,38 +85,73 @@ export function ListView({
     isFiltering,
   } = useListFilters(items);
   const isSearching = query.trim().length > 0;
-  const grouped = useMemo(() => groupItems(filteredItems), [filteredItems]);
-  const filteredCount = filteredItems.length;
   const hasMounted = useHasMounted();
-  const [checked, setChecked] = useState<Set<number>>(() => {
-    if (typeof window === "undefined") return new Set<number>();
-    if (mode !== "shopping" || !storageKey) return new Set<number>();
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      return raw ? new Set<number>(JSON.parse(raw)) : new Set<number>();
-    } catch {
-      return new Set<number>();
-    }
-  });
   const reduced = useReducedMotion();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const [marks, setMarks] = useState<Map<number, ItemStatus>>(() =>
+    loadMarks(storageKey, mode),
+  );
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
 
   useEffect(() => {
     if (mode !== "shopping" || !storageKey || !hasMounted) return;
+    const bought: number[] = [];
+    const missing: number[] = [];
+    marks.forEach((status, id) => {
+      if (status === "bought") bought.push(id);
+      else missing.push(id);
+    });
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(Array.from(checked)));
+      window.localStorage.setItem(storageKey, JSON.stringify({ bought, missing }));
     } catch {}
-  }, [checked, mode, storageKey, hasMounted]);
+  }, [marks, mode, storageKey, hasMounted]);
 
-  const displayedChecked: ReadonlySet<number> = hasMounted ? checked : EMPTY_CHECKED;
+  // Evita mismatch de hidratación: hasta montar, tratamos todo como pendiente.
+  const displayedMarks: ReadonlyMap<number, ItemStatus> = hasMounted ? marks : EMPTY_MARKS;
 
-  function toggle(id: number) {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  const displayedItems = useMemo(() => {
+    if (!isShopping || statusFilter === "all") return filteredItems;
+    return filteredItems.filter((item) => {
+      const s = displayedMarks.get(item.id);
+      if (statusFilter === "pending") return s === undefined;
+      return s === statusFilter;
+    });
+  }, [filteredItems, statusFilter, displayedMarks, isShopping]);
+
+  const grouped = useMemo(() => groupItems(displayedItems), [displayedItems]);
+  const filteredCount = displayedItems.length;
+  const singleItem = displayedItems.length === 1 ? displayedItems[0] : null;
+
+  function afterMark() {
+    // En la vista de pendientes, al marcar un producto buscado este desaparece;
+    // limpiamos el buscador y reenfocamos para encadenar la siguiente búsqueda.
+    if (statusFilter === "pending" && query.trim().length > 0) {
+      setQuery("");
+      searchRef.current?.focus();
+    }
+  }
+
+  function setStatus(id: number, status: ItemStatus | null) {
+    setMarks((prev) => {
+      const next = new Map(prev);
+      if (status === null) next.delete(id);
+      else next.set(id, status);
       return next;
     });
     if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(8);
+  }
+
+  function toggleBought(id: number) {
+    const wasBought = marks.get(id) === "bought";
+    setStatus(id, wasBought ? null : "bought");
+    if (!wasBought) afterMark();
+  }
+
+  function toggleMissing(id: number) {
+    const wasMissing = marks.get(id) === "missing";
+    setStatus(id, wasMissing ? null : "missing");
+    if (!wasMissing) afterMark();
   }
 
   const [collapsedStores, setCollapsedStores] = useState<Set<string>>(new Set());
@@ -111,51 +175,57 @@ export function ListView({
     });
   }, []);
 
-  async function copyAll() {
-    const text = buildMarkdownText(list, items);
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Lista copiada (Markdown)");
-    } catch {
-      toast.error("No se pudo copiar");
+  const resolvedCount = displayedMarks.size;
+  const progress = items.length === 0 ? 0 : Math.round((resolvedCount / items.length) * 100);
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && isShopping && isSearching && singleItem) {
+      e.preventDefault();
+      toggleBought(singleItem.id);
     }
   }
 
-  const progress = items.length === 0 ? 0 : Math.round((displayedChecked.size / items.length) * 100);
-
   function renderItem(item: ShoppingListItem) {
-    const isChecked = displayedChecked.has(item.id);
-    const content = (
-      <div className="flex items-center gap-3 w-full">
-        {mode === "shopping" && (
-          <CircleCheck checked={isChecked} reduced={!!reduced} />
-        )}
-        <QuantityBadge
-          value={item.quantityValue}
-          unit={item.quantityUnit}
-          dimmed={isChecked}
-        />
+    const status = displayedMarks.get(item.id);
+    const isBought = status === "bought";
+    const isMissing = status === "missing";
+    const dimmed = isBought || isMissing;
+
+    const body = (
+      <>
+        {isShopping &&
+          (isMissing ? (
+            <CircleMissing />
+          ) : (
+            <CircleCheck checked={isBought} reduced={!!reduced} />
+          ))}
+        <QuantityBadge value={item.quantityValue} unit={item.quantityUnit} dimmed={dimmed} />
         <span className="flex-1 min-w-0">
           <span
             className={cn(
               "font-medium block break-words transition-all duration-200",
-              isChecked && "line-through text-muted-foreground",
+              dimmed && "line-through text-muted-foreground",
             )}
           >
             {item.productName}
+            {isMissing && (
+              <span className="ml-1.5 inline-block rounded-md bg-destructive/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-destructive no-underline">
+                no hay
+              </span>
+            )}
           </span>
           {item.notes && (
             <span
               className={cn(
                 "block text-xs italic text-muted-foreground/90 mt-0.5",
-                isChecked && "line-through opacity-70",
+                dimmed && "line-through opacity-70",
               )}
             >
               💬 {item.notes}
             </span>
           )}
         </span>
-      </div>
+      </>
     );
 
     return (
@@ -166,20 +236,38 @@ export function ListView({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {mode === "shopping" ? (
-          <button
-            type="button"
-            onClick={() => toggle(item.id)}
+        {isShopping ? (
+          <div
             className={cn(
-              "w-full rounded-2xl border border-border/70 bg-card px-3.5 py-2 text-left shadow-soft transition-all duration-200 hover:border-primary/40 hover:shadow-glow active:scale-[0.99]",
-              isChecked && "bg-muted/50 border-border/50 shadow-none",
+              "flex items-stretch rounded-2xl border shadow-soft transition-all duration-200",
+              !status && "border-border/70 bg-card",
+              isBought && "border-border/50 bg-muted/50 shadow-none",
+              isMissing && "border-destructive/25 bg-destructive/5 shadow-none",
             )}
           >
-            {content}
-          </button>
+            <button
+              type="button"
+              onClick={() => toggleBought(item.id)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-l-2xl px-3.5 py-2 text-left transition-colors hover:bg-muted/40 active:scale-[0.99]"
+            >
+              {body}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleMissing(item.id)}
+              aria-label={isMissing ? "Quitar marca de no hay" : "Marcar que no hay"}
+              title={isMissing ? "Quitar “no hay”" : "No hay"}
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded-r-2xl border-l border-border/50 px-3 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive",
+                isMissing && "bg-destructive/10 text-destructive",
+              )}
+            >
+              <Ban className="size-4" />
+            </button>
+          </div>
         ) : (
-          <div className="w-full rounded-2xl border border-border/70 bg-card px-3.5 py-2 shadow-soft">
-            {content}
+          <div className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-2 shadow-soft">
+            {body}
           </div>
         )}
       </motion.li>
@@ -188,32 +276,15 @@ export function ListView({
 
   return (
     <div className="space-y-6">
-      {mode === "shopping" && (
+      {isShopping && (
         <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-soft backdrop-blur-sm">
           <div className="flex items-center justify-between text-sm mb-2.5">
             <span className="text-muted-foreground">Tu progreso</span>
             <span className="font-medium tabular-nums">
-              {displayedChecked.size} / {items.length}
+              {resolvedCount} / {items.length}
             </span>
           </div>
           <ProgressBar value={progress} emoji={progressEmoji(progress)} variant="default" />
-        </div>
-      )}
-
-      {actionsHeader && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            {isFiltering
-              ? `${filteredCount} de ${items.length} ${items.length === 1 ? "producto" : "productos"}`
-              : `${items.length} ${items.length === 1 ? "producto" : "productos"} en ${grouped.length} ${grouped.length === 1 ? "comercio" : "comercios"}`}
-          </p>
-          <Button
-            onClick={copyAll}
-            size="lg"
-            className="rounded-2xl gap-2 shadow-soft"
-          >
-            <Copy className="size-4" /> Copiar todo
-          </Button>
         </div>
       )}
 
@@ -221,15 +292,14 @@ export function ListView({
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-primary" />
           <Input
+            ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Buscar producto…"
-            className={cn(
-              "h-11 rounded-2xl pl-10",
-              !actionsHeader && isSearching ? "pr-24" : "pr-10",
-            )}
+            className={cn("h-11 rounded-2xl pl-10", isSearching ? "pr-24" : "pr-10")}
           />
-          {!actionsHeader && isSearching && (
+          {isSearching && (
             <div className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
               <span className="text-xs tabular-nums text-muted-foreground">
                 {filteredCount}/{items.length}
@@ -249,6 +319,51 @@ export function ListView({
         </div>
       )}
 
+      {isShopping && isSearching && singleItem && (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="lime"
+            className="flex-1 gap-1.5 rounded-2xl"
+            onClick={() => toggleBought(singleItem.id)}
+          >
+            <Check className="size-4" /> Comprado
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 gap-1.5 rounded-2xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => toggleMissing(singleItem.id)}
+          >
+            <Ban className="size-4" /> No hay
+          </Button>
+        </div>
+      )}
+
+      {isShopping && (
+        <div className="grid grid-cols-4 gap-1 rounded-2xl border border-border/70 bg-muted/40 p-1">
+          {STATUS_TABS.map((tab) => {
+            const active = statusFilter === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setStatusFilter(tab.value)}
+                aria-pressed={active}
+                className={cn(
+                  "rounded-xl px-1 py-1.5 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-card text-foreground shadow-soft"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {items.length > 0 && storeOptions.length > 0 && (
         <ListFilterSelects
           storeOptions={storeOptions}
@@ -260,13 +375,19 @@ export function ListView({
         />
       )}
 
-      {isFiltering && grouped.length === 0 && (
+      {grouped.length === 0 && items.length > 0 && (
         <Card className="border-dashed p-8 text-center text-muted-foreground">
-          <div className="text-4xl mb-2">🔍</div>
+          <div className="text-4xl mb-2">{isSearching ? "🔍" : "✅"}</div>
           <p>
             {isSearching
               ? `No hay productos que coincidan con “${query}”.`
-              : "No hay productos que coincidan con el filtro."}
+              : statusFilter === "pending"
+                ? "¡No quedan pendientes! 🎉"
+                : statusFilter === "bought"
+                  ? "Todavía no marcaste nada como comprado."
+                  : statusFilter === "missing"
+                    ? "No marcaste ningún producto como “no hay”."
+                    : "No hay productos que coincidan con el filtro."}
           </p>
         </Card>
       )}
@@ -398,6 +519,17 @@ function CircleCheck({ checked, reduced }: { checked: boolean; reduced: boolean 
           }
         />
       </svg>
+    </span>
+  );
+}
+
+function CircleMissing() {
+  return (
+    <span
+      className="shrink-0 size-7 rounded-full border-2 border-destructive/60 bg-destructive/15 text-destructive flex items-center justify-center"
+      aria-hidden
+    >
+      <X className="size-4" strokeWidth={3} />
     </span>
   );
 }

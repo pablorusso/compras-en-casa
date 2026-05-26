@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { asc, count, eq } from "drizzle-orm";
 import { Sparkles } from "lucide-react";
 import { db } from "@/db";
@@ -10,6 +11,7 @@ import { NewListButton } from "@/components/new-list-button";
 import { EditableListTitle } from "@/components/editable-list-title";
 import { ShareLinkSection } from "@/components/share-link-section";
 import { CopyListButton } from "@/components/copy-list-button";
+import { PrintListButton } from "@/components/print-list-button";
 import { HeroBasket } from "@/components/illustrations";
 import { getCurrentList, getListItems, getProductsNotInList } from "@/lib/lists";
 import { getActiveShareLink } from "@/lib/share";
@@ -18,6 +20,13 @@ import { getRequestOrigin } from "@/lib/origin";
 export const dynamic = "force-dynamic";
 
 const dateFmt: Intl.DateTimeFormatOptions = { dateStyle: "medium" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const current = await getCurrentList();
+  return {
+    title: current ? `Compras en Casa - ${current.name}` : "Compras en Casa",
+  };
+}
 
 export default async function ListPage() {
   const [current, origin] = await Promise.all([
@@ -132,6 +141,7 @@ export default async function ListPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <CopyListButton list={current} items={items} size="lg" />
+              <PrintListButton list={current} items={items} size="lg" />
             </div>
             <NewListButton
               currentList={{ id: current.id, name: current.name }}

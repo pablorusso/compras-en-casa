@@ -1,13 +1,27 @@
+import type { Metadata } from "next";
 import { getListItems } from "@/lib/lists";
 import { resolveShareLink } from "@/lib/share";
 import { isLoggedIn } from "@/lib/session";
 import { ListView } from "@/components/list-view";
-import { ExpiryBadge, ExpiredBadge } from "@/components/expiry-badge";
+import { CopyListButton } from "@/components/copy-list-button";
+import { PrintListButton } from "@/components/print-list-button";
+import { ScrollToEdge } from "@/components/scroll-to-edge";
 import { Hourglass, LeafCorner, LostBag } from "@/components/illustrations";
 
 export const dynamic = "force-dynamic";
 
 type Params = { token: string };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<Params>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const res = await resolveShareLink(token);
+  if (res.kind === "not_found") return { title: "Compras en Casa" };
+  return { title: `Compras en Casa - ${res.list.name}` };
+}
 
 export default async function SharePage({ params }: { params: Promise<Params> }) {
   const { token } = await params;
@@ -67,7 +81,7 @@ export default async function SharePage({ params }: { params: Promise<Params> })
           Este link expiró el {expiredLabel}. Solo vos lo ves porque estás logueado como admin.
         </div>
       )}
-      <header className="mb-7 flex flex-wrap items-end justify-between gap-3">
+      <header className="mb-7 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
             Lista para comprar
@@ -76,14 +90,12 @@ export default async function SharePage({ params }: { params: Promise<Params> })
             {res.list.name}
           </h1>
         </div>
-        {expiredButAdmin ? (
-          <ExpiredBadge expiresAt={res.link.expiresAt} />
-        ) : (
-          <ExpiryBadge expiresAt={res.link.expiresAt} />
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <CopyListButton list={res.list} items={items} variant="ghost" size="sm" />
+          <PrintListButton list={res.list} items={items} variant="ghost" size="sm" />
+        </div>
       </header>
       <ListView
-        list={res.list}
         items={items}
         mode="shopping"
         storageKey={`comprasencasa_share_${token}`}
@@ -91,6 +103,7 @@ export default async function SharePage({ params }: { params: Promise<Params> })
       <p className="text-center text-xs text-muted-foreground mt-10">
         Los tildes se guardan en este dispositivo. No se envían a nadie.
       </p>
+      <ScrollToEdge />
     </main>
   );
 }

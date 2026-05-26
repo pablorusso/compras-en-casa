@@ -12,6 +12,7 @@ import { stores, categories, products, shoppingListItems } from "@/db/schema";
 import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyListButton } from "@/components/copy-list-button";
+import { PrintListButton } from "@/components/print-list-button";
 import { NewListButton } from "@/components/new-list-button";
 import { ShareLinkSection } from "@/components/share-link-section";
 import { getCurrentList, getListItems } from "@/lib/lists";
@@ -150,6 +151,7 @@ export default async function AdminDashboard() {
                     <ArrowRight className="size-4" />
                   </LinkButton>
                   <CopyListButton list={current} items={currentItems} size="lg" />
+                  <PrintListButton list={current} items={currentItems} size="lg" />
                 </div>
                 <NewListButton
                   currentList={{ id: current.id, name: current.name }}

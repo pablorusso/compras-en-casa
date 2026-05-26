@@ -35,7 +35,7 @@ export function CloneListButton({
   function onClick() {
     const target = sourceName ? `"${sourceName}"` : "esta lista";
     const message = hasCurrent
-      ? `Esto va a archivar la lista vigente actual (y vencer su link compartible) y crear una nueva con los ítems de ${target}. ¿Continuar?`
+      ? `Esto va a archivar la lista vigente actual (y eliminar su link compartible) y crear una nueva con los ítems de ${target}. ¿Continuar?`
       : `¿Crear una nueva lista vigente con los ítems de ${target}?`;
     if (!confirm(message)) return;
     const fd = new FormData();

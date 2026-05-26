@@ -35,7 +35,7 @@ export function NewListButton({
   function confirmIfNeeded(): boolean {
     if (!currentList) return true;
     return confirm(
-      `Esto va a archivar la lista vigente "${currentList.name}" y su link compartible vencerá. ¿Continuar?`,
+      `Esto va a archivar la lista vigente "${currentList.name}" y su link compartible se eliminará. ¿Continuar?`,
     );
   }
 

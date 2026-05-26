@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,13 @@ export function CopyableLink({
   label,
   className,
   external = true,
+  footer,
 }: {
   url: string;
   label?: string;
   className?: string;
   external?: boolean;
+  footer?: ReactNode;
 }) {
   async function copy() {
     try {
@@ -60,6 +63,7 @@ export function CopyableLink({
           </a>
         )}
       </div>
+      {footer && <div className="mt-2 pt-2 border-t">{footer}</div>}
     </div>
   );
 }
