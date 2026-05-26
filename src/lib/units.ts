@@ -92,3 +92,70 @@ export function unitDisplay(unit: string): string {
   if (isCanonicalUnit(unit)) return UNIT_DISPLAY[unit];
   return unit.toLowerCase();
 }
+
+// Devuelve el nombre del producto (en minúsculas) si es un huevo, o null si no.
+// Detecta "Huevos", "Huevos blancos", "Huevo de campo", etc. y preserva el calificativo.
+export function eggNoun(name: string): string | null {
+  const trimmed = name.trim();
+  return /^huevos?\b/i.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+// Huevos: escalones fijos hasta 30 (½ docena, docena, maple) y, a partir de ahí,
+// siempre de a 12 (30 → 42 → 54 → ...). El piso es 6.
+const EGG_LADDER = [6, 12, 30] as const;
+const EGG_ANCHOR = 30; // último escalón fijo; arriba de él se avanza de a EGG_STEP
+const EGG_STEP = 12;
+
+function stepEggs(value: number, direction: 1 | -1): number {
+  if (direction > 0) {
+    for (const rung of EGG_LADDER) {
+      if (value < rung) return rung;
+    }
+    // value >= 30 → siguiente múltiplo de 12 por encima del ancla
+    return EGG_ANCHOR + (Math.floor((value - EGG_ANCHOR) / EGG_STEP) + 1) * EGG_STEP;
+  }
+  if (value > EGG_ANCHOR) {
+    return EGG_ANCHOR + (Math.ceil((value - EGG_ANCHOR) / EGG_STEP) - 1) * EGG_STEP;
+  }
+  // value <= 30 → bajar dentro de la escalera fija, con piso en 6
+  let prev: number = EGG_LADDER[0];
+  for (const rung of EGG_LADDER) {
+    if (rung < value) prev = rung;
+    else break;
+  }
+  return prev;
+}
+
+type StepCfg = { big: number; small: number; threshold: number; min: number };
+
+const STEP_CONFIG: Record<CanonicalUnit, StepCfg> = {
+  kg: { big: 0.5, small: 0.25, threshold: 1, min: 0.25 },
+  litro: { big: 0.5, small: 0.25, threshold: 1, min: 0.25 },
+  gr: { big: 250, small: 50, threshold: 250, min: 50 },
+  ml: { big: 250, small: 50, threshold: 250, min: 50 },
+  unidad: { big: 1, small: 1, threshold: 0, min: 1 },
+};
+
+/** Calcula el siguiente valor de cantidad al tocar la flecha (atajo). */
+export function stepQuantity(
+  value: number,
+  unit: string,
+  direction: 1 | -1,
+  productName = "",
+): number {
+  const u: CanonicalUnit = isCanonicalUnit(unit) ? unit : "unidad";
+
+  if (u === "unidad") {
+    if (eggNoun(productName)) return stepEggs(value, direction);
+    // Resto de unidades: enteros completos, incluso desde un valor fraccionario.
+    const next = direction > 0 ? Math.floor(value) + 1 : Math.ceil(value) - 1;
+    return Math.max(1, next);
+  }
+
+  const cfg = STEP_CONFIG[u];
+  // En la frontera: subir usa el paso grande, bajar usa el paso chico.
+  const inBigZone = direction > 0 ? value >= cfg.threshold : value > cfg.threshold;
+  const stepSize = inBigZone ? cfg.big : cfg.small;
+  const next = +(value + direction * stepSize).toFixed(2);
+  return Math.max(cfg.min, next);
+}

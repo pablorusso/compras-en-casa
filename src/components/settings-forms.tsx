@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState, useTransition } from "react";
-import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2 } from "lucide-react";
+import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2, Upload, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/link-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { changePasswordAction, type AuthState } from "@/actions/auth";
@@ -121,6 +122,27 @@ export function SettingsForms({ settings }: { settings: SettingsValues }) {
               Actualizar password
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Upload className="size-4 text-primary" />
+            <h2 className="font-semibold">Importar / Exportar catálogo</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Exportá el maestro a markdown o reemplazalo con un import.
+          </p>
+          <LinkButton
+            href="/admin/import"
+            variant="outline"
+            size="lg"
+            className="rounded-xl w-full"
+          >
+            Abrir Importar / Exportar
+            <ArrowRight className="size-4" />
+          </LinkButton>
         </CardContent>
       </Card>
 

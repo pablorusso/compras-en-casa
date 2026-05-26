@@ -12,7 +12,6 @@ import { stores, categories, products, shoppingListItems } from "@/db/schema";
 import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyListButton } from "@/components/copy-list-button";
-import { ListIcon } from "@/components/list-icon";
 import { NewListButton } from "@/components/new-list-button";
 import { ShareLinkSection } from "@/components/share-link-section";
 import { getCurrentList, getListItems } from "@/lib/lists";
@@ -91,19 +90,16 @@ export default async function AdminDashboard() {
           aria-hidden
           className="absolute -right-4 -top-4 w-44 h-36 md:w-56 md:h-44 opacity-50 pointer-events-none"
         />
-        <CardContent className="relative p-6 md:p-7 flex flex-col gap-5">
-          <div className="max-w-[72%] md:max-w-[74%]">
+        <CardContent className="relative p-6 md:p-7 pb-4 md:pb-5 flex flex-col gap-6">
+          <div className="pr-32 md:pr-48">
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
               Lista
             </p>
             {current ? (
               <>
-                <div className="flex items-start gap-3 mt-1.5">
-                  <ListIcon size="md" className="shrink-0" />
-                  <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight min-w-0 break-words">
-                    {current.name}
-                  </h2>
-                </div>
+                <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight mt-1.5 break-words">
+                  {current.name}
+                </h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   {currentItemsCount}{" "}
                   {currentItemsCount === 1 ? "producto" : "productos"} · creada el{" "}
@@ -112,7 +108,7 @@ export default async function AdminDashboard() {
               </>
             ) : (
               <>
-                <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight mt-1.5">
+                <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight mt-1.5 break-words">
                   {hasMaster ? "Empezá una nueva lista" : "Cargá el maestro primero"}
                 </h2>
                 <p className="text-sm text-muted-foreground mt-2">
@@ -150,7 +146,7 @@ export default async function AdminDashboard() {
                     variant="tomato"
                     className="rounded-2xl"
                   >
-                    <ListChecks className="size-4" /> Ver/Editar
+                    <ListChecks className="size-4" /> Editar
                     <ArrowRight className="size-4" />
                   </LinkButton>
                   <CopyListButton list={current} items={currentItems} size="lg" />

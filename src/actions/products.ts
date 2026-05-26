@@ -31,6 +31,7 @@ type CreateInput = {
   defaultQuantityUnit: string;
   isSeasonal: boolean;
   seasonMonths: number[];
+  excludeFromAutoAdd: boolean;
 };
 
 async function fromForm(formData: FormData): Promise<CreateInput> {
@@ -46,6 +47,9 @@ async function fromForm(formData: FormData): Promise<CreateInput> {
   const defaultQuantityUnit = canon.unit;
   const isSeasonal = formData.get("isSeasonal") === "on" || formData.get("isSeasonal") === "true";
   const seasonMonths = isSeasonal ? parseSeasonMonths(formData) : [];
+  const excludeFromAutoAdd =
+    formData.get("excludeFromAutoAdd") === "on" ||
+    formData.get("excludeFromAutoAdd") === "true";
   if (!name) throw new Error("Nombre requerido");
   if (!storeId) throw new Error("Comercio requerido");
   if (isSeasonal && seasonMonths.length === 0) {
@@ -67,6 +71,7 @@ async function fromForm(formData: FormData): Promise<CreateInput> {
     defaultQuantityUnit,
     isSeasonal,
     seasonMonths,
+    excludeFromAutoAdd,
   };
 }
 
@@ -84,6 +89,15 @@ export async function updateProductAction(formData: FormData) {
   if (!id) throw new Error("ID requerido");
   const input = await fromForm(formData);
   await db.update(products).set(input).where(eq(products.id, id));
+  revalidatePath("/admin/products");
+}
+
+export async function setProductExcludeFromAutoAddAction(formData: FormData) {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  if (!id) throw new Error("ID requerido");
+  const excludeFromAutoAdd = formData.get("excludeFromAutoAdd") === "on";
+  await db.update(products).set({ excludeFromAutoAdd }).where(eq(products.id, id));
   revalidatePath("/admin/products");
 }
 

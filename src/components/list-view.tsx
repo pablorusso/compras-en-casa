@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Copy, MapPin, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, MapPin, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { ProgressBar } from "@/components/progress-bar";
 import { QuantityBadge } from "@/components/quantity-badge";
 import { SectionHeading } from "@/components/section-heading";
-import { groupItems, buildMarkdownText, filterItemsByQuery } from "@/lib/format";
+import { groupItems, buildMarkdownText } from "@/lib/format";
+import { ListFilterSelects } from "@/components/list-filter-selects";
+import { useListFilters } from "@/lib/use-list-filters";
 import { getStoreStyle } from "@/lib/store-style";
 import { useHasMounted } from "@/lib/use-has-mounted";
 import type { ShoppingListItem } from "@/db/schema";
@@ -33,18 +35,27 @@ export function ListView({
   items,
   mode = "view",
   storageKey,
+  actionsHeader = true,
 }: {
   list: { id: number; name: string };
   items: ShoppingListItem[];
   mode?: Mode;
   storageKey?: string;
+  actionsHeader?: boolean;
 }) {
-  const [query, setQuery] = useState("");
+  const {
+    query,
+    setQuery,
+    storeFilter,
+    selectStore,
+    categoryFilter,
+    setCategoryFilter,
+    storeOptions,
+    filterCats,
+    filteredItems,
+    isFiltering,
+  } = useListFilters(items);
   const isSearching = query.trim().length > 0;
-  const filteredItems = useMemo(
-    () => filterItemsByQuery(items, query),
-    [items, query],
-  );
   const grouped = useMemo(() => groupItems(filteredItems), [filteredItems]);
   const filteredCount = filteredItems.length;
   const hasMounted = useHasMounted();
@@ -79,6 +90,27 @@ export function ListView({
     if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(8);
   }
 
+  const [collapsedStores, setCollapsedStores] = useState<Set<string>>(new Set());
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+
+  const toggleStore = useCallback((key: string) => {
+    setCollapsedStores((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const toggleCat = useCallback((key: string) => {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   async function copyAll() {
     const text = buildMarkdownText(list, items);
     try {
@@ -106,7 +138,7 @@ export function ListView({
         <span className="flex-1 min-w-0">
           <span
             className={cn(
-              "font-medium block truncate transition-all duration-200",
+              "font-medium block break-words transition-all duration-200",
               isChecked && "line-through text-muted-foreground",
             )}
           >
@@ -168,20 +200,22 @@ export function ListView({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {isSearching
-            ? `${filteredCount} de ${items.length} ${items.length === 1 ? "producto" : "productos"}`
-            : `${items.length} ${items.length === 1 ? "producto" : "productos"} en ${grouped.length} ${grouped.length === 1 ? "comercio" : "comercios"}`}
-        </p>
-        <Button
-          onClick={copyAll}
-          size="lg"
-          className="rounded-2xl gap-2 shadow-soft"
-        >
-          <Copy className="size-4" /> Copiar todo
-        </Button>
-      </div>
+      {actionsHeader && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {isFiltering
+              ? `${filteredCount} de ${items.length} ${items.length === 1 ? "producto" : "productos"}`
+              : `${items.length} ${items.length === 1 ? "producto" : "productos"} en ${grouped.length} ${grouped.length === 1 ? "comercio" : "comercios"}`}
+          </p>
+          <Button
+            onClick={copyAll}
+            size="lg"
+            className="rounded-2xl gap-2 shadow-soft"
+          >
+            <Copy className="size-4" /> Copiar todo
+          </Button>
+        </div>
+      )}
 
       {items.length > 0 && (
         <div className="relative">
@@ -190,67 +224,145 @@ export function ListView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar producto…"
-            className="pl-10 h-11 rounded-2xl"
+            className={cn(
+              "h-11 rounded-2xl pl-10",
+              !actionsHeader && isSearching ? "pr-24" : "pr-10",
+            )}
           />
+          {!actionsHeader && isSearching && (
+            <div className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {filteredCount}/{items.length}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={() => setQuery("")}
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-      {isSearching && grouped.length === 0 && (
+      {items.length > 0 && storeOptions.length > 0 && (
+        <ListFilterSelects
+          storeOptions={storeOptions}
+          filterCats={filterCats}
+          storeFilter={storeFilter}
+          categoryFilter={categoryFilter}
+          onStoreChange={selectStore}
+          onCategoryChange={setCategoryFilter}
+        />
+      )}
+
+      {isFiltering && grouped.length === 0 && (
         <Card className="border-dashed p-8 text-center text-muted-foreground">
           <div className="text-4xl mb-2">🔍</div>
-          <p>No hay productos que coincidan con &ldquo;{query}&rdquo;.</p>
+          <p>
+            {isSearching
+              ? `No hay productos que coincidan con “${query}”.`
+              : "No hay productos que coincidan con el filtro."}
+          </p>
         </Card>
       )}
 
       <ul className="space-y-8">
         {grouped.map((store) => {
+          const sKey = String(store.storeId ?? store.storeName);
+          const storeCollapsed = isFiltering ? false : collapsedStores.has(sKey);
           const style = getStoreStyle(store.storeId ?? store.storeName);
+          const storeCount =
+            store.directItems.length +
+            store.categories.reduce((acc, c) => acc + c.items.length, 0);
           return (
             <li key={`store-${store.storeId ?? store.storeName}`}>
-              <SectionHeading
-                title={store.storeName}
-                eyebrow={`${store.directItems.length + store.categories.reduce((acc, c) => acc + c.items.length, 0)} productos`}
-                illustration={
-                  <div
-                    className={cn(
-                      "flex size-12 items-center justify-center rounded-2xl ring-1",
-                      style.tint,
-                      style.ring,
-                    )}
-                  >
-                    <span className="text-3xl leading-none">{store.storeEmoji}</span>
-                  </div>
-                }
-                className={store.storeAddress ? "mb-2" : "mb-4"}
-              />
-              {store.storeAddress && (
+              <button
+                type="button"
+                onClick={() => toggleStore(sKey)}
+                aria-expanded={!storeCollapsed}
+                className={cn(
+                  "group flex w-full items-start gap-2 text-left outline-none rounded-xl -mx-1 px-1 py-1 transition hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40",
+                  store.storeAddress ? "mb-2" : "mb-4",
+                )}
+              >
+                <ChevronDown
+                  className={cn(
+                    "mt-4 size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform",
+                    storeCollapsed && "-rotate-90",
+                  )}
+                  aria-hidden
+                />
+                <SectionHeading
+                  title={store.storeName}
+                  eyebrow={`${storeCount} ${storeCount === 1 ? "producto" : "productos"}`}
+                  illustration={
+                    <div
+                      className={cn(
+                        "flex size-12 items-center justify-center rounded-2xl ring-1",
+                        style.tint,
+                        style.ring,
+                      )}
+                    >
+                      <span className="text-3xl leading-none">{store.storeEmoji}</span>
+                    </div>
+                  }
+                  className="flex-1"
+                />
+              </button>
+              {store.storeAddress && !storeCollapsed && (
                 <p className="mb-4 ml-[60px] flex items-center gap-1.5 text-sm text-muted-foreground">
                   <MapPin className="size-3.5 shrink-0" aria-hidden />
                   <span>{store.storeAddress}</span>
                 </p>
               )}
-              <div className="space-y-5 pl-1">
-                {store.directItems.length > 0 && (
-                  <ul className="space-y-2">
-                    <AnimatePresence initial={false}>
-                      {store.directItems.map((item) => renderItem(item))}
-                    </AnimatePresence>
-                  </ul>
-                )}
-                {store.categories.map((cat) => (
-                  <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
-                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mb-2">
-                      <span className="text-base">{cat.categoryEmoji}</span>
-                      <span>{cat.categoryName}</span>
-                    </div>
+              {!storeCollapsed && (
+                <div className="space-y-5 pl-1">
+                  {store.directItems.length > 0 && (
                     <ul className="space-y-2">
                       <AnimatePresence initial={false}>
-                        {cat.items.map((item) => renderItem(item))}
+                        {store.directItems.map((item) => renderItem(item))}
                       </AnimatePresence>
                     </ul>
-                  </div>
-                ))}
-              </div>
+                  )}
+                  {store.categories.map((cat) => {
+                    const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
+                    const catCollapsed = isFiltering ? false : collapsedCats.has(cKey);
+                    return (
+                      <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleCat(cKey)}
+                          aria-expanded={!catCollapsed}
+                          className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
+                        >
+                          {catCollapsed ? (
+                            <ChevronRight className="size-3 shrink-0" aria-hidden />
+                          ) : (
+                            <ChevronDown className="size-3 shrink-0" aria-hidden />
+                          )}
+                          <span className="text-base">{cat.categoryEmoji}</span>
+                          <span>{cat.categoryName}</span>
+                          <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
+                            ({cat.items.length})
+                          </span>
+                        </button>
+                        {!catCollapsed && (
+                          <ul className="space-y-2">
+                            <AnimatePresence initial={false}>
+                              {cat.items.map((item) => renderItem(item))}
+                            </AnimatePresence>
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </li>
           );
         })}

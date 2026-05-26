@@ -15,7 +15,7 @@ export default async function SettingsPage() {
   };
 
   return (
-    <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-2xl mx-auto w-full">
+    <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-3xl mx-auto w-full">
       <PageHeader eyebrow="App" title="Ajustes" subtitle="Configurá la app a tu medida." />
       <SettingsForms
         settings={{

@@ -16,7 +16,7 @@ export default async function ProductsPage() {
       .innerJoin(stores, eq(products.storeId, stores.id))
       .leftJoin(categories, eq(products.categoryId, categories.id))
       .where(eq(products.archived, false))
-      .orderBy(asc(stores.name), asc(categories.name), asc(products.name)),
+      .orderBy(asc(products.name)),
     db.select().from(stores).orderBy(asc(stores.sortOrder), asc(stores.name)),
     db
       .select()

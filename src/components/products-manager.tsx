@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Trash2, Search, Leaf } from "lucide-react";
+import { Trash2, Search, Leaf, EyeOff, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { deleteProductAction } from "@/actions/products";
+import {
+  deleteProductAction,
+  setProductExcludeFromAutoAddAction,
+} from "@/actions/products";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +21,7 @@ import { MONTHS_SHORT_ES } from "@/lib/seasonality";
 import { QuantityBadge } from "@/components/quantity-badge";
 import { MotionList } from "@/components/motion-card";
 import { listItem, tiltHover } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 export type ProductRow = {
   id: number;
@@ -29,6 +33,7 @@ export type ProductRow = {
   isSeasonal: boolean;
   seasonMonths: number[];
   archived: boolean;
+  excludeFromAutoAdd: boolean;
   category: { id: number; name: string; emoji: string } | null;
   store: { id: number; name: string; emoji: string };
 };
@@ -43,16 +48,32 @@ export function ProductsManager({
   categories: CategoryOption[];
 }) {
   const [query, setQuery] = useState("");
+  const [storeFilter, setStoreFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [excludedFilter, setExcludedFilter] = useState<"" | "yes" | "no">("");
+
+  // Las categorías dependen del comercio: sólo mostramos las del comercio
+  // seleccionado. Sin comercio elegido el combo de categoría queda inactivo.
+  const filterCats = useMemo(() => {
+    if (!storeFilter) return [];
+    return categories.filter((c) => c.storeId === Number(storeFilter));
+  }, [storeFilter, categories]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
+    return products.filter((p) => {
+      if (storeFilter && p.storeId !== Number(storeFilter)) return false;
+      if (categoryFilter && p.categoryId !== Number(categoryFilter)) return false;
+      if (excludedFilter === "yes" && !p.excludeFromAutoAdd) return false;
+      if (excludedFilter === "no" && p.excludeFromAutoAdd) return false;
+      if (!q) return true;
+      return (
         p.name.toLowerCase().includes(q) ||
         p.category?.name.toLowerCase().includes(q) ||
-        p.store.name.toLowerCase().includes(q),
-    );
-  }, [products, query]);
+        p.store.name.toLowerCase().includes(q)
+      );
+    });
+  }, [products, query, storeFilter, categoryFilter, excludedFilter]);
 
   return (
     <div className="space-y-5">
@@ -71,6 +92,49 @@ export function ProductsManager({
           stores={stores}
           categories={categories}
         />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        <select
+          aria-label="Filtrar por comercio"
+          value={storeFilter}
+          onChange={(e) => {
+            setStoreFilter(e.target.value);
+            setCategoryFilter("");
+          }}
+          className="h-11 w-full rounded-2xl border border-input bg-background px-3.5 text-sm"
+        >
+          <option value="">Todos los comercios</option>
+          {stores.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.emoji} {s.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrar por categoría"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          disabled={!storeFilter}
+          className="h-11 w-full rounded-2xl border border-input bg-background px-3.5 text-sm disabled:opacity-50"
+        >
+          <option value="">Todas las categorías</option>
+          {filterCats.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.emoji} {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrar por excluidos del auto-agregado"
+          value={excludedFilter}
+          onChange={(e) => setExcludedFilter(e.target.value as "" | "yes" | "no")}
+          className="col-span-2 sm:col-span-1 h-11 w-full rounded-2xl border border-input bg-background px-3.5 text-sm"
+        >
+          <option value="">Excluidos: todos</option>
+          <option value="yes">Sólo excluidos</option>
+          <option value="no">Sólo no excluidos</option>
+        </select>
       </div>
 
       {stores.length === 0 ? (
@@ -158,6 +222,7 @@ function ProductCard({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          <AutoAddToggle id={product.id} excludeFromAutoAdd={product.excludeFromAutoAdd} />
           <ProductFormDrawer
             mode="edit"
             product={product}
@@ -168,6 +233,61 @@ function ProductCard({
         </div>
       </Card>
     </motion.li>
+  );
+}
+
+function AutoAddToggle({
+  id,
+  excludeFromAutoAdd,
+}: {
+  id: number;
+  excludeFromAutoAdd: boolean;
+}) {
+  // Estado optimista: refleja el cambio al instante y se re-sincroniza solo con
+  // el valor del servidor cuando la revalidación trae el dato fresco.
+  const [excluded, setExcluded] = useOptimistic(excludeFromAutoAdd);
+  const [pending, startTransition] = useTransition();
+
+  function toggle() {
+    const next = !excluded;
+    const fd = new FormData();
+    fd.set("id", String(id));
+    if (next) fd.set("excludeFromAutoAdd", "on");
+    startTransition(async () => {
+      setExcluded(next);
+      try {
+        await setProductExcludeFromAutoAddAction(fd);
+        toast.success(
+          next
+            ? "No se agregará automáticamente a listas nuevas"
+            : "Se agregará automáticamente a listas nuevas",
+        );
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
+    });
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={toggle}
+      disabled={pending}
+      aria-pressed={excluded}
+      className={cn(excluded && "text-primary")}
+      title={
+        excluded
+          ? "No se agrega automáticamente a listas nuevas. Clic para volver a incluirlo."
+          : "Se agrega automáticamente a listas nuevas. Clic para excluirlo."
+      }
+      aria-label={
+        excluded ? "No se agrega automáticamente (clic para incluir)" : "Se agrega automáticamente (clic para excluir)"
+      }
+    >
+      {excluded ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+    </Button>
   );
 }
 

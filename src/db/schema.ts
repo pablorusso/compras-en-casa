@@ -21,6 +21,7 @@ export const stores = pgTable("stores", {
   emoji: text("emoji").notNull().default("🛒"),
   address: text("address"),
   sortOrder: integer("sort_order").notNull().default(0),
+  excludeFromAutoAdd: boolean("exclude_from_auto_add").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -36,6 +37,7 @@ export const categories = pgTable(
     name: text("name").notNull(),
     emoji: text("emoji").notNull().default("🛒"),
     sortOrder: integer("sort_order").notNull().default(0),
+    excludeFromAutoAdd: boolean("exclude_from_auto_add").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("categories_store_name_uniq").on(t.storeId, t.name)],
@@ -63,6 +65,7 @@ export const products = pgTable(
       .notNull()
       .default(sql`'{}'::smallint[]`),
     archived: boolean("archived").notNull().default(false),
+    excludeFromAutoAdd: boolean("exclude_from_auto_add").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -99,10 +102,12 @@ export const shoppingListItems = pgTable(
     categoryId: integer("category_id"),
     categoryName: text("category_name"),
     categoryEmoji: text("category_emoji"),
+    categorySortOrder: integer("category_sort_order").notNull().default(0),
     storeId: integer("store_id"),
     storeName: text("store_name"),
     storeEmoji: text("store_emoji"),
     storeAddress: text("store_address"),
+    storeSortOrder: integer("store_sort_order").notNull().default(0),
     quantityValue: numeric("quantity_value", { precision: 10, scale: 3 }).notNull(),
     quantityUnit: text("quantity_unit").notNull(),
     notes: text("notes"),

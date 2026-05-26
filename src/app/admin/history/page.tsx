@@ -16,7 +16,7 @@ export default async function HistoryPage() {
   const [lists, current] = await Promise.all([getHistory(50), getCurrentList()]);
 
   return (
-    <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-2xl mx-auto w-full">
+    <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-3xl mx-auto w-full">
       <PageHeader
         eyebrow="Archivo"
         title="Histórico"

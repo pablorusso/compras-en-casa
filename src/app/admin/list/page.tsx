@@ -8,8 +8,9 @@ import { LinkButton } from "@/components/ui/link-button";
 import { ListEditor } from "@/components/list-editor";
 import { NewListButton } from "@/components/new-list-button";
 import { EditableListTitle } from "@/components/editable-list-title";
-import { ListIcon } from "@/components/list-icon";
 import { ShareLinkSection } from "@/components/share-link-section";
+import { CopyListButton } from "@/components/copy-list-button";
+import { HeroBasket } from "@/components/illustrations";
 import { getCurrentList, getListItems, getProductsNotInList } from "@/lib/lists";
 import { getActiveShareLink } from "@/lib/share";
 import { getRequestOrigin } from "@/lib/origin";
@@ -95,41 +96,51 @@ export default async function ListPage() {
 
   return (
     <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-3xl mx-auto w-full">
-      <header className="mb-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
-          Lista vigente
-        </p>
-        <div className="flex items-start gap-3 mt-2">
-          <ListIcon size="md" className="shrink-0" />
-          <div className="min-w-0 flex-1">
-            <EditableListTitle listId={current.id} initialName={current.name} size="md" />
-            <p className="text-sm text-muted-foreground mt-1">
-              Creada el {current.createdAt.toLocaleDateString("es-AR", dateFmt)}
+      <Card className="relative mb-7 overflow-hidden">
+        <HeroBasket
+          aria-hidden
+          className="absolute -right-4 -top-4 w-44 h-36 md:w-56 md:h-44 opacity-50 pointer-events-none"
+        />
+        <CardContent className="relative p-6 md:p-7 pb-4 md:pb-5 flex flex-col gap-6">
+          <div className="pr-32 md:pr-48">
+            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
+              Lista vigente
+            </p>
+            <div className="mt-1.5">
+              <EditableListTitle listId={current.id} initialName={current.name} size="md" />
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              {items.length} {items.length === 1 ? "producto" : "productos"} · creada el{" "}
+              {current.createdAt.toLocaleDateString("es-AR", dateFmt)}
             </p>
           </div>
-          <NewListButton
-            currentList={{ id: current.id, name: current.name }}
-            size="default"
-            className="shrink-0"
-          />
-        </div>
-      </header>
 
-      <div className="mb-6">
-        <ShareLinkSection
-          key={current.id}
-          listId={current.id}
-          origin={origin}
-          initial={
-            activeShare
-              ? {
-                  token: activeShare.token,
-                  expiresAt: activeShare.expiresAt.toISOString(),
-                }
-              : null
-          }
-        />
-      </div>
+          <ShareLinkSection
+            key={current.id}
+            listId={current.id}
+            origin={origin}
+            initial={
+              activeShare
+                ? {
+                    token: activeShare.token,
+                    expiresAt: activeShare.expiresAt.toISOString(),
+                  }
+                : null
+            }
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              <CopyListButton list={current} items={items} size="lg" />
+            </div>
+            <NewListButton
+              currentList={{ id: current.id, name: current.name }}
+              variant="outline"
+              size="lg"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <ListEditor
         list={{ id: current.id, name: current.name }}

@@ -11,13 +11,13 @@ import {
   History as HistoryIcon,
   LogOut,
   Tags,
-  Upload,
   Moon,
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/link-button";
 import { LogoMark } from "@/components/illustrations";
 import { PwaInstaller } from "@/components/pwa-installer";
 import { useHasMounted } from "@/lib/use-has-mounted";
@@ -28,22 +28,50 @@ type NavItem = {
   label: string;
   icon: typeof Home;
   exact?: boolean;
-  mobile?: boolean;
 };
 
 const NAV: NavItem[] = [
-  { href: "/admin", label: "Inicio", icon: Home, exact: true, mobile: true },
-  { href: "/admin/list", label: "Lista", icon: ListChecks, exact: true, mobile: true },
-  { href: "/admin/products", label: "Productos", icon: Package, mobile: true },
-  { href: "/admin/stores", label: "Comercios", icon: Tags, mobile: true },
-  { href: "/admin/history", label: "Histórico", icon: HistoryIcon, mobile: false },
-  { href: "/admin/import", label: "Importar/Exportar", icon: Upload, mobile: false },
-  { href: "/admin/settings", label: "Ajustes", icon: SettingsIcon, mobile: true },
+  { href: "/admin", label: "Inicio", icon: Home, exact: true },
+  { href: "/admin/list", label: "Lista", icon: ListChecks, exact: true },
+  { href: "/admin/products", label: "Productos", icon: Package },
+  { href: "/admin/stores", label: "Comercios", icon: Tags },
+  { href: "/admin/history", label: "Histórico", icon: HistoryIcon },
 ];
 
 function isActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+function isSettingsActive(pathname: string) {
+  return (
+    pathname === "/admin/settings" ||
+    pathname.startsWith("/admin/settings/") ||
+    pathname === "/admin/import" ||
+    pathname.startsWith("/admin/import/")
+  );
+}
+
+function SettingsIconLink() {
+  const pathname = usePathname();
+  const active = isSettingsActive(pathname);
+  return (
+    <LinkButton
+      href="/admin/settings"
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "size-9",
+        active
+          ? "bg-accent/50 text-foreground"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent/40",
+      )}
+      aria-label="Ajustes"
+      aria-current={active ? "page" : undefined}
+    >
+      <SettingsIcon className="size-4" />
+    </LinkButton>
+  );
 }
 
 function ThemeToggle() {
@@ -131,41 +159,30 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
         </LayoutGroup>
-        <div className="mt-auto p-4 flex items-center gap-2 border-t border-border/50">
-          <ThemeToggle />
-          <PwaInstaller iconOnly className="text-muted-foreground hover:text-foreground" />
-          <form action={logoutAction} className="ml-auto">
-            <Button
-              type="submit"
-              variant="ghost"
-              size="icon"
-              className="size-9 text-muted-foreground hover:text-foreground"
-              aria-label="Salir"
-            >
-              <LogOut className="size-4" />
-            </Button>
-          </form>
-        </div>
       </aside>
 
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/60 bg-background/85 px-4 py-3 backdrop-blur-md md:hidden">
+        <header
+          className="sticky top-0 z-30 flex items-center gap-2 border-b border-border/60 bg-background/85 px-4 pb-3 backdrop-blur-md md:px-6"
+          style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+        >
           <Link
             href="/admin"
-            className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight"
+            className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight md:hidden"
           >
             <LogoMark className="size-7" />
             <span>Compras en Casa</span>
           </Link>
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1">
             <PwaInstaller iconOnly className="text-muted-foreground hover:text-foreground" />
             <ThemeToggle />
+            <SettingsIconLink />
             <form action={logoutAction}>
               <Button
                 type="submit"
                 variant="ghost"
                 size="icon"
-                className="size-9"
+                className="size-9 text-muted-foreground hover:text-foreground"
                 aria-label="Salir"
               >
                 <LogOut className="size-4" />
@@ -183,7 +200,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             className="fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 border-t border-border/60 bg-background/95 backdrop-blur-md md:hidden"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
-            {NAV.filter((i) => i.mobile).map((item) => {
+            {NAV.map((item) => {
               const active = isActive(pathname, item.href, item.exact);
               const Icon = item.icon;
               return (

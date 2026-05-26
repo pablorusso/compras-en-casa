@@ -15,6 +15,7 @@ type Props = {
   label?: string;
   ariaLabel?: string;
   variant?: "icon" | "button";
+  size?: "default" | "lg";
   className?: string;
 };
 
@@ -25,6 +26,7 @@ export function CloneListButton({
   label = "Usar como nueva lista",
   ariaLabel,
   variant = "button",
+  size = "default",
   className,
 }: Props) {
   const router = useRouter();
@@ -70,6 +72,7 @@ export function CloneListButton({
     <Button
       type="button"
       variant="outline"
+      size={size}
       onClick={onClick}
       disabled={pending}
       className={cn("rounded-2xl gap-1.5", className)}

@@ -66,7 +66,7 @@ export function EditableListTitle({
   const titleClass =
     size === "lg"
       ? "font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight"
-      : "font-display text-2xl font-semibold tracking-tight leading-tight";
+      : "font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight";
 
   if (editing) {
     return (

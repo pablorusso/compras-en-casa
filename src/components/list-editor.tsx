@@ -18,12 +18,10 @@ import {
   ChevronRight,
   X,
   MessageSquare,
-  Copy,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  addExistingProductAction,
-  createAndAddProductAction,
   removeItemAction,
   updateItemNotesAction,
   updateItemQuantityAction,
@@ -31,39 +29,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { QuantityBadge } from "@/components/quantity-badge";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerTrigger,
-  DrawerClose,
-} from "@/components/ui/drawer";
 import { SectionHeading } from "@/components/section-heading";
+import { SwipeableRow } from "@/components/swipeable-row";
 import { EmptyList } from "@/components/illustrations";
+import { useIsTouch } from "@/lib/use-is-touch";
+import {
+  AddProductDrawer,
+  type AvailableProduct,
+} from "@/components/add-product-drawer";
 import { getStoreStyle } from "@/lib/store-style";
-import { groupItems, buildMarkdownText, filterItemsByQuery } from "@/lib/format";
-import { UNIT_PICKER_GRID, isCanonicalUnit, unitDisplay, type CanonicalUnit } from "@/lib/units";
+import { groupItems } from "@/lib/format";
+import { ListFilterSelects } from "@/components/list-filter-selects";
+import { useListFilters } from "@/lib/use-list-filters";
+import { isCanonicalUnit, stepQuantity, UNIT_PICKER_GRID, unitDisplay, type CanonicalUnit } from "@/lib/units";
 import type { ShoppingListItem } from "@/db/schema";
 import type {
   StoreOption,
   CategoryOption,
 } from "@/components/product-form-drawer";
 import { cn } from "@/lib/utils";
-
-type AvailableProduct = {
-  id: number;
-  name: string;
-  storeId: number | null;
-  categoryName: string;
-  storeName: string;
-  defaultQuantityValue: string;
-  defaultQuantityUnit: string;
-};
 
 type EditorKind = "qty" | "notes";
 type ActiveEditor = { id: number; kind: EditorKind } | null;
@@ -81,14 +66,76 @@ export function ListEditor({
   stores: StoreOption[];
   categories: CategoryOption[];
 }) {
-  const [query, setQuery] = useState("");
-  const isSearching = query.trim().length > 0;
-  const filteredItems = useMemo(
-    () => filterItemsByQuery(items, query),
-    [items, query],
+  // Borrado optimista con opción de deshacer: el ítem se oculta de inmediato y
+  // el borrado real en el servidor se ejecuta tras un breve margen.
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
+  const deleteTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+
+  const commitDelete = useCallback((id: number) => {
+    deleteTimers.current.delete(id);
+    const fd = new FormData();
+    fd.set("id", String(id));
+    removeItemAction(fd).catch((err) => toast.error((err as Error).message));
+  }, []);
+
+  const requestDelete = useCallback(
+    (item: ShoppingListItem) => {
+      setHiddenIds((prev) => new Set(prev).add(item.id));
+      const timer = setTimeout(() => commitDelete(item.id), 5000);
+      deleteTimers.current.set(item.id, timer);
+      toast.success(`"${item.productName}" borrado`, {
+        duration: 5000,
+        action: {
+          label: "Deshacer",
+          onClick: () => {
+            const t = deleteTimers.current.get(item.id);
+            if (t) clearTimeout(t);
+            deleteTimers.current.delete(item.id);
+            setHiddenIds((prev) => {
+              const next = new Set(prev);
+              next.delete(item.id);
+              return next;
+            });
+          },
+        },
+      });
+    },
+    [commitDelete],
   );
+
+  // Al desmontar, confirmar de inmediato los borrados pendientes.
+  useEffect(() => {
+    const timers = deleteTimers.current;
+    return () => {
+      timers.forEach((timer, id) => {
+        clearTimeout(timer);
+        const fd = new FormData();
+        fd.set("id", String(id));
+        removeItemAction(fd).catch(() => {});
+      });
+      timers.clear();
+    };
+  }, []);
+
+  const visibleItems = useMemo(
+    () => items.filter((i) => !hiddenIds.has(i.id)),
+    [items, hiddenIds],
+  );
+  const {
+    query,
+    setQuery,
+    storeFilter,
+    selectStore,
+    categoryFilter,
+    setCategoryFilter,
+    storeOptions,
+    filterCats,
+    filteredItems,
+    isFiltering,
+  } = useListFilters(visibleItems);
+  const isSearching = query.trim().length > 0;
   const grouped = useMemo(() => groupItems(filteredItems), [filteredItems]);
-  const totalItems = items.length;
+  const totalItems = visibleItems.length;
   const filteredCount = filteredItems.length;
 
   const [activeEditor, setActiveEditor] = useState<ActiveEditor>(null);
@@ -138,53 +185,59 @@ export function ListEditor({
     });
   }, []);
 
-  async function copyAll() {
-    const text = buildMarkdownText(list, items);
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Lista copiada (Markdown)");
-    } catch {
-      toast.error("No se pudo copiar");
-    }
-  }
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          {isSearching
-            ? `${filteredCount} de ${totalItems} ${totalItems === 1 ? "producto" : "productos"}`
-            : `${totalItems} ${totalItems === 1 ? "producto" : "productos"} · ${grouped.length} ${grouped.length === 1 ? "comercio" : "comercios"}`}
-        </p>
-        <div className="flex items-center gap-2">
-          {totalItems > 0 && (
-            <Button
-              variant="outline"
-              className="rounded-2xl gap-1.5"
-              onClick={copyAll}
-            >
-              <Copy className="size-4" /> Copiar todo
-            </Button>
-          )}
+      {totalItems > 0 && (
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2.5">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-primary" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar producto…"
+              className={cn("h-11 rounded-2xl pl-10", isSearching ? "pr-24" : "pr-10")}
+            />
+            {isSearching && (
+              <div className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {filteredCount}/{totalItems}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 rounded-full text-muted-foreground hover:text-foreground"
+                  onClick={() => setQuery("")}
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
           <AddProductDrawer
             listId={list.id}
             available={available}
             stores={stores}
             categories={categories}
+            trigger={
+              <Button className="rounded-xl shrink-0">
+                <Plus className="size-4" /> Agregar
+              </Button>
+            }
           />
         </div>
-      </div>
+      )}
 
-      {totalItems > 0 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-primary" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar producto…"
-            className="pl-10 h-11 rounded-2xl"
-          />
-        </div>
+      {totalItems > 0 && storeOptions.length > 0 && (
+        <ListFilterSelects
+          storeOptions={storeOptions}
+          filterCats={filterCats}
+          storeFilter={storeFilter}
+          categoryFilter={categoryFilter}
+          onStoreChange={selectStore}
+          onCategoryChange={setCategoryFilter}
+        />
       )}
 
       {totalItems === 0 ? (
@@ -199,71 +252,94 @@ export function ListEditor({
                 Agregá productos del maestro o creá uno nuevo.
               </p>
             </div>
+            <AddProductDrawer
+              listId={list.id}
+              available={available}
+              stores={stores}
+              categories={categories}
+            />
           </div>
         </Card>
       ) : grouped.length === 0 ? (
         <Card className="border-dashed p-8 text-center text-muted-foreground">
           <div className="text-4xl mb-2">🔍</div>
-          <p>No hay productos que coincidan con &ldquo;{query}&rdquo;.</p>
+          <p>
+            {isSearching
+              ? `No hay productos que coincidan con “${query}”.`
+              : "No hay productos que coincidan con el filtro."}
+          </p>
         </Card>
       ) : (
-        <ul className="space-y-6">
+        <ul className="space-y-8">
           {grouped.map((store) => {
             const sKey = String(store.storeId ?? store.storeName);
-            const storeCollapsed = isSearching ? false : collapsedStores.has(sKey);
+            const storeCollapsed = isFiltering ? false : collapsedStores.has(sKey);
             const style = getStoreStyle(store.storeId ?? store.storeName);
+            const storeCount =
+              store.directItems.length +
+              store.categories.reduce((acc, c) => acc + c.items.length, 0);
             return (
               <li key={`store-${store.storeId ?? store.storeName}`}>
-                <div className="sticky top-[57px] md:top-2 bg-background/90 backdrop-blur-sm py-2 z-10 -mx-2 px-2 rounded-xl flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleStore(sKey)}
-                    aria-expanded={!storeCollapsed}
-                    className="group flex flex-1 min-w-0 items-center gap-2 rounded-xl -mx-1 px-1 py-1 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40 transition"
-                  >
-                    {storeCollapsed ? (
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden />
-                    ) : (
-                      <ChevronDown className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden />
+                <div className="sticky top-[57px] md:top-2 bg-background/90 backdrop-blur-sm py-2 z-10 -mx-2 px-2 rounded-xl">
+                  <div className="flex items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleStore(sKey)}
+                      aria-expanded={!storeCollapsed}
+                      className="group flex flex-1 min-w-0 items-start gap-2 rounded-xl -mx-1 px-1 py-1 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40 transition"
+                    >
+                      <ChevronDown
+                        className={cn(
+                          "mt-4 size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform",
+                          storeCollapsed && "-rotate-90",
+                        )}
+                        aria-hidden
+                      />
+                      <SectionHeading
+                        title={store.storeName}
+                        eyebrow={`${storeCount} ${storeCount === 1 ? "producto" : "productos"}`}
+                        illustration={
+                          <div
+                            className={cn(
+                              "flex size-12 items-center justify-center rounded-2xl ring-1",
+                              style.tint,
+                              style.ring,
+                            )}
+                          >
+                            <span className="text-3xl leading-none">{store.storeEmoji}</span>
+                          </div>
+                        }
+                        className="flex-1"
+                      />
+                    </button>
+                    {store.storeId != null && (
+                      <AddProductDrawer
+                        listId={list.id}
+                        available={available}
+                        stores={stores}
+                        categories={categories}
+                        lockedStoreId={store.storeId}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-3 shrink-0 rounded-xl text-primary hover:bg-primary/10"
+                          >
+                            <Plus className="size-4" /> Agregar
+                          </Button>
+                        }
+                      />
                     )}
-                    <SectionHeading
-                      title={store.storeName}
-                      size="sm"
-                      underline={false}
-                      illustration={
-                        <span
-                          className={cn(
-                            "flex size-10 items-center justify-center rounded-xl ring-1",
-                            style.tint,
-                            style.ring,
-                          )}
-                        >
-                          <span className="text-2xl leading-none">{store.storeEmoji}</span>
-                        </span>
-                      }
-                    />
-                  </button>
-                  {store.storeId != null && (
-                    <AddProductDrawer
-                      listId={list.id}
-                      available={available}
-                      stores={stores}
-                      categories={categories}
-                      lockedStoreId={store.storeId}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0 rounded-xl text-primary hover:bg-primary/10"
-                        >
-                          <Plus className="size-4" /> Agregar
-                        </Button>
-                      }
-                    />
-                  )}
+                  </div>
                 </div>
+                {store.storeAddress && !storeCollapsed && (
+                  <p className="mt-2 mb-3 ml-[60px] flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <MapPin className="size-3.5 shrink-0" aria-hidden />
+                    <span>{store.storeAddress}</span>
+                  </p>
+                )}
                 {!storeCollapsed && (
-                  <div className="space-y-3 mt-2">
+                  <div className="space-y-5 mt-3 pl-1">
                     {store.directItems.length > 0 && (
                       <ul className="space-y-1.5">
                         <AnimatePresence initial={false}>
@@ -282,6 +358,7 @@ export function ListEditor({
                                 requestEdit={requestEdit}
                                 clearEditor={clearEditor}
                                 registerCommit={registerCommit}
+                                onRequestDelete={requestDelete}
                               />
                             </motion.li>
                           ))}
@@ -290,21 +367,21 @@ export function ListEditor({
                     )}
                     {store.categories.map((cat) => {
                       const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
-                      const catCollapsed = isSearching ? false : collapsedCats.has(cKey);
+                      const catCollapsed = isFiltering ? false : collapsedCats.has(cKey);
                       return (
                         <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
                           <button
                             type="button"
                             onClick={() => toggleCat(cKey)}
                             aria-expanded={!catCollapsed}
-                            className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-1.5 pl-1 outline-none focus-visible:text-foreground transition"
+                            className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
                           >
                             {catCollapsed ? (
                               <ChevronRight className="size-3 shrink-0" aria-hidden />
                             ) : (
                               <ChevronDown className="size-3 shrink-0" aria-hidden />
                             )}
-                            <span className="text-sm">{cat.categoryEmoji}</span>
+                            <span className="text-base">{cat.categoryEmoji}</span>
                             <span>{cat.categoryName}</span>
                             <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
                               ({cat.items.length})
@@ -328,6 +405,7 @@ export function ListEditor({
                                       requestEdit={requestEdit}
                                       clearEditor={clearEditor}
                                       registerCommit={registerCommit}
+                                      onRequestDelete={requestDelete}
                                     />
                                   </motion.li>
                                 ))}
@@ -355,13 +433,16 @@ function ListItemRow({
   requestEdit,
   clearEditor,
   registerCommit,
+  onRequestDelete,
 }: {
   item: ShoppingListItem;
   activeEditor: ActiveEditor;
   requestEdit: (id: number, kind: EditorKind) => void;
   clearEditor: () => void;
   registerCommit: (key: string, fn: () => void) => () => void;
+  onRequestDelete: (item: ShoppingListItem) => void;
 }) {
+  const isTouch = useIsTouch();
   const isEditingQty = activeEditor?.id === item.id && activeEditor.kind === "qty";
   const isEditingNotes = activeEditor?.id === item.id && activeEditor.kind === "notes";
 
@@ -390,8 +471,7 @@ function ListItemRow({
 
   function step(delta: number) {
     const base = Number(value) || 0;
-    const stepSize = base >= 10 ? 1 : base >= 1 ? 0.5 : 0.1;
-    const next = Math.max(0.1, +(base + delta * stepSize).toFixed(2));
+    const next = stepQuantity(base, unit, delta > 0 ? 1 : -1, item.productName);
     setValue(String(next));
     const fd = new FormData();
     fd.set("id", String(item.id));
@@ -423,16 +503,7 @@ function ListItemRow({
   }
 
   function remove() {
-    if (!confirm(`Quitar "${item.productName}" de la lista?`)) return;
-    const fd = new FormData();
-    fd.set("id", String(item.id));
-    startTransition(async () => {
-      try {
-        await removeItemAction(fd);
-      } catch (err) {
-        toast.error((err as Error).message);
-      }
-    });
+    onRequestDelete(item);
   }
 
   function saveNotes(raw: string) {
@@ -516,7 +587,35 @@ function ListItemRow({
     });
   }, [item.id, initialNotes, registerCommit]);
 
+  const quantityActions = (
+    <>
+      <button
+        type="button"
+        onClick={() => step(-1)}
+        disabled={pending}
+        aria-label="Menos"
+        className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground shadow-sm transition active:scale-95 disabled:opacity-50"
+      >
+        <ChevronDown className="size-5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => step(1)}
+        disabled={pending}
+        aria-label="Más"
+        className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary shadow-sm transition active:scale-95 disabled:opacity-50"
+      >
+        <ChevronUp className="size-5" />
+      </button>
+    </>
+  );
+
   return (
+    <SwipeableRow
+      enabled={isTouch && !isEditingQty && !isEditingNotes}
+      onDelete={() => onRequestDelete(item)}
+      quantityActions={quantityActions}
+    >
     <Card className={cn("flex flex-col gap-1 px-3 py-2", pending && "opacity-70")}>
       <div className="flex flex-row items-center gap-3">
         {isEditingQty ? (
@@ -532,7 +631,7 @@ function ListItemRow({
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">{item.productName}</div>
+          <div className="font-medium break-words">{item.productName}</div>
           {isEditingQty && (
             <div className="mt-1 space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -604,36 +703,40 @@ function ListItemRow({
                 <MessageSquare className="size-4" />
               </Button>
             )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-8"
-              onClick={() => step(-1)}
-              disabled={pending}
-              aria-label="Menos"
-            >
-              <ChevronDown className="size-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-8"
-              onClick={() => step(1)}
-              disabled={pending}
-              aria-label="Más"
-            >
-              <ChevronUp className="size-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-8 text-destructive hover:text-destructive"
-              onClick={remove}
-              disabled={pending}
-              aria-label="Quitar"
-            >
-              <Trash2 className="size-4" />
-            </Button>
+            {!isTouch && (
+              <>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-8"
+                  onClick={() => step(-1)}
+                  disabled={pending}
+                  aria-label="Menos"
+                >
+                  <ChevronDown className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-8"
+                  onClick={() => step(1)}
+                  disabled={pending}
+                  aria-label="Más"
+                >
+                  <ChevronUp className="size-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-8 text-destructive hover:text-destructive"
+                  onClick={remove}
+                  disabled={pending}
+                  aria-label="Quitar"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -699,324 +802,6 @@ function ListItemRow({
         </div>
       )}
     </Card>
-  );
-}
-
-function AddProductDrawer({
-  listId,
-  available,
-  stores,
-  categories,
-  lockedStoreId,
-  trigger,
-}: {
-  listId: number;
-  available: AvailableProduct[];
-  stores: StoreOption[];
-  categories: CategoryOption[];
-  // Si está seteado, el drawer se abre filtrado por este comercio: tab "Del
-  // maestro" solo muestra productos de ese comercio, y "Crear nuevo" trae el
-  // select de comercio fijo. Sirve para el botón "Agregar a [Comercio]" que
-  // aparece en cada sección de la lista.
-  lockedStoreId?: number;
-  trigger?: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"existing" | "new">("existing");
-  const [pending, startTransition] = useTransition();
-
-  const lockedStore = lockedStoreId
-    ? stores.find((s) => s.id === lockedStoreId) ?? null
-    : null;
-
-  const scoped = useMemo(() => {
-    if (!lockedStoreId) return available;
-    return available.filter((p) => p.storeId === lockedStoreId);
-  }, [available, lockedStoreId]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return scoped;
-    return scoped.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.categoryName.toLowerCase().includes(q) ||
-        p.storeName.toLowerCase().includes(q),
-    );
-  }, [scoped, query]);
-
-  function addExisting(productId: number) {
-    const fd = new FormData();
-    fd.set("listId", String(listId));
-    fd.set("productId", String(productId));
-    startTransition(async () => {
-      try {
-        await addExistingProductAction(fd);
-        toast.success("Agregado a la lista");
-      } catch (err) {
-        toast.error((err as Error).message);
-      }
-    });
-  }
-
-  return (
-    <Drawer open={open} onOpenChange={setOpen}>
-      <DrawerTrigger asChild>
-        {trigger ?? (
-          <Button variant="lime" className="rounded-2xl shadow-soft">
-            <Plus className="size-4" /> Agregar
-          </Button>
-        )}
-      </DrawerTrigger>
-      <DrawerContent>
-        <div className="mx-auto w-full max-w-md max-h-[85svh] flex flex-col">
-          <DrawerHeader>
-            <DrawerTitle>
-              {lockedStore
-                ? `Agregar a ${lockedStore.name}`
-                : "Agregar producto"}
-            </DrawerTitle>
-            <DrawerDescription>
-              {lockedStore
-                ? `Sumá productos de ${lockedStore.name} o creá uno nuevo al vuelo.`
-                : "Sumá productos del maestro o creá uno nuevo al vuelo."}
-            </DrawerDescription>
-          </DrawerHeader>
-
-          <div className="px-4 pb-2 grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() => setTab("existing")}
-              className={cn(
-                "rounded-xl px-3 py-2 text-sm font-medium transition",
-                tab === "existing"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              Del maestro
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("new")}
-              className={cn(
-                "rounded-xl px-3 py-2 text-sm font-medium transition",
-                tab === "new"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              Crear nuevo
-            </button>
-          </div>
-
-          {tab === "existing" ? (
-            <>
-              <div className="px-4 py-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Buscar…"
-                    autoFocus
-                    className="pl-9 h-11"
-                  />
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto px-4 pb-4">
-                {scoped.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    {lockedStore
-                      ? `Todos los productos de ${lockedStore.name} ya están en la lista.`
-                      : "Todos los productos del maestro ya están en la lista."}
-                  </p>
-                ) : filtered.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No hay coincidencias.
-                  </p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {filtered.map((p) => (
-                      <li key={p.id}>
-                        <button
-                          type="button"
-                          onClick={() => addExisting(p.id)}
-                          disabled={pending}
-                          className="w-full flex items-center gap-3 rounded-xl border bg-card px-3 py-2 hover:border-primary/50 transition text-left"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate">{p.name}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {p.storeName} · {p.categoryName}
-                            </div>
-                          </div>
-                          <Plus className="size-4 text-primary" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
-          ) : (
-            <CreateNewForm
-              listId={listId}
-              stores={stores}
-              categories={categories}
-              lockedStoreId={lockedStoreId}
-              onDone={() => setOpen(false)}
-            />
-          )}
-
-          <DrawerFooter className="pt-2">
-            <DrawerClose asChild>
-              <Button variant="ghost" size="lg">
-                Cerrar
-              </Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </div>
-      </DrawerContent>
-    </Drawer>
-  );
-}
-
-function CreateNewForm({
-  listId,
-  stores,
-  categories,
-  lockedStoreId,
-  onDone,
-}: {
-  listId: number;
-  stores: StoreOption[];
-  categories: CategoryOption[];
-  lockedStoreId?: number;
-  onDone: () => void;
-}) {
-  const [pending, startTransition] = useTransition();
-  const [storeId, setStoreId] = useState(
-    lockedStoreId ? String(lockedStoreId) : "",
-  );
-  const [categoryId, setCategoryId] = useState("");
-  const [unit, setUnit] = useState<CanonicalUnit>("unidad");
-  const filteredCats = useMemo(() => {
-    if (!storeId) return [];
-    return categories.filter((c) => c.storeId === Number(storeId));
-  }, [storeId, categories]);
-  return (
-    <form
-      action={(fd) =>
-        startTransition(async () => {
-          try {
-            await createAndAddProductAction(fd);
-            toast.success("Producto creado y agregado");
-            onDone();
-          } catch (err) {
-            toast.error((err as Error).message);
-          }
-        })
-      }
-      className="flex-1 overflow-y-auto px-4 space-y-4 pb-4"
-    >
-      <input type="hidden" name="listId" value={listId} />
-      <div className="space-y-2">
-        <Label htmlFor="new-name">Nombre del producto</Label>
-        <Input id="new-name" name="name" required autoFocus className="h-11" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label htmlFor="new-store">Comercio</Label>
-          <select
-            id="new-store"
-            name="storeId"
-            value={storeId}
-            onChange={(e) => {
-              setStoreId(e.target.value);
-              setCategoryId("");
-            }}
-            required
-            disabled={lockedStoreId != null}
-            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            <option value="" disabled>
-              Elegí…
-            </option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.emoji} {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="new-cat">Categoría</Label>
-          <select
-            id="new-cat"
-            name="categoryId"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            disabled={!storeId}
-            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
-          >
-            <option value="">— Sin categoría —</option>
-            {filteredCats.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.emoji} {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label htmlFor="new-qty">Cantidad</Label>
-          <Input
-            id="new-qty"
-            name="defaultQuantityValue"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.001"
-            defaultValue="1"
-            required
-            className="h-11"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Unidad</Label>
-          <input type="hidden" name="defaultQuantityUnit" value={unit} />
-          <div className="grid grid-cols-3 gap-1">
-            {UNIT_PICKER_GRID.map((u, i) =>
-              u === null ? (
-                <div key={`empty-${i}`} aria-hidden />
-              ) : (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setUnit(u)}
-                  className={cn(
-                    "h-11 w-full rounded-full px-2.5 text-xs border transition",
-                    unit === u
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40",
-                  )}
-                >
-                  {unitDisplay(u)}
-                </button>
-              ),
-            )}
-          </div>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Se agregará al maestro y a esta lista.
-      </p>
-      <Button type="submit" size="lg" disabled={pending} className="w-full rounded-xl">
-        {pending ? "Creando…" : "Crear y agregar"}
-      </Button>
-    </form>
+    </SwipeableRow>
   );
 }

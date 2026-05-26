@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, ChevronDown, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Sparkles, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   createStoreAction,
@@ -12,12 +12,15 @@ import {
   updateCategoryAction,
   deleteCategoryAction,
   regenerateEmojiAction,
+  reorderStoresAction,
+  reorderCategoriesAction,
 } from "@/actions/stores";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Drawer,
   DrawerContent,
@@ -34,17 +37,25 @@ import { getStoreStyle } from "@/lib/store-style";
 import { listItem } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-type Cat = { id: number; name: string; emoji: string; storeId: number };
+type Cat = {
+  id: number;
+  name: string;
+  emoji: string;
+  storeId: number;
+  excludeFromAutoAdd: boolean;
+};
 type Store = {
   id: number;
   name: string;
   emoji: string;
   address: string | null;
+  excludeFromAutoAdd: boolean;
   categories: Cat[];
 };
 
 export function StoresManager({ data }: { data: Store[] }) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set(data.map((s) => s.id)));
+  const [reorderPending, startReorder] = useTransition();
 
   function toggle(id: number) {
     setExpanded((prev) => {
@@ -52,6 +63,34 @@ export function StoresManager({ data }: { data: Store[] }) {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  }
+
+  function moveStore(index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= data.length) return;
+    const ids = data.map((s) => s.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    startReorder(async () => {
+      try {
+        await reorderStoresAction(ids);
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
+    });
+  }
+
+  function moveCategory(store: Store, index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= store.categories.length) return;
+    const ids = store.categories.map((c) => c.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    startReorder(async () => {
+      try {
+        await reorderCategoriesAction(store.id, ids);
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
     });
   }
 
@@ -71,7 +110,7 @@ export function StoresManager({ data }: { data: Store[] }) {
         </Card>
       ) : (
         <MotionList className="space-y-3" staggerChildren={0.05}>
-          {data.map((store) => {
+          {data.map((store, storeIndex) => {
             const isOpen = expanded.has(store.id);
             const style = getStoreStyle(store.id);
             return (
@@ -100,10 +139,27 @@ export function StoresManager({ data }: { data: Store[] }) {
                             {store.categories.length}{" "}
                             {store.categories.length === 1 ? "categoría" : "categorías"}
                           </Badge>
+                          {store.excludeFromAutoAdd && (
+                            <Badge
+                              variant="secondary"
+                              className="gap-1"
+                              title="No se agrega automáticamente a listas nuevas"
+                            >
+                              <EyeOff className="size-3" /> Manual
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </button>
                     <div className="flex items-center gap-0.5 shrink-0">
+                      <ReorderControl
+                        onUp={() => moveStore(storeIndex, -1)}
+                        onDown={() => moveStore(storeIndex, 1)}
+                        isFirst={storeIndex === 0}
+                        isLast={storeIndex === data.length - 1}
+                        disabled={reorderPending}
+                        label="comercio"
+                      />
                       <RegenerateEmojiButton
                         kind="store"
                         id={store.id}
@@ -148,11 +204,19 @@ export function StoresManager({ data }: { data: Store[] }) {
                             </p>
                           ) : (
                             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {store.categories.map((cat) => (
+                              {store.categories.map((cat, catIndex) => (
                                 <li
                                   key={cat.id}
                                   className="flex items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-3 py-2"
                                 >
+                                  <ReorderControl
+                                    onUp={() => moveCategory(store, catIndex, -1)}
+                                    onDown={() => moveCategory(store, catIndex, 1)}
+                                    isFirst={catIndex === 0}
+                                    isLast={catIndex === store.categories.length - 1}
+                                    disabled={reorderPending}
+                                    label="categoría"
+                                  />
                                   <EmojiButton
                                     kind="category"
                                     id={cat.id}
@@ -161,6 +225,12 @@ export function StoresManager({ data }: { data: Store[] }) {
                                   <span className="flex-1 truncate text-sm font-medium">
                                     {cat.name}
                                   </span>
+                                  {cat.excludeFromAutoAdd && (
+                                    <EyeOff
+                                      className="size-3.5 shrink-0 text-muted-foreground"
+                                      aria-label="No se agrega automáticamente a listas nuevas"
+                                    />
+                                  )}
                                   <RegenerateEmojiButton
                                     kind="category"
                                     id={cat.id}
@@ -204,6 +274,9 @@ function StoreFormDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [excludeFromAutoAdd, setExcludeFromAutoAdd] = useState(
+    store?.excludeFromAutoAdd ?? false,
+  );
 
   return (
     <Drawer open={open} onOpenChange={setOpen}>
@@ -220,7 +293,8 @@ function StoreFormDrawer({
       </DrawerTrigger>
       <DrawerContent>
         <form
-          action={(fd) =>
+          action={(fd) => {
+            if (excludeFromAutoAdd) fd.set("excludeFromAutoAdd", "on");
             startTransition(async () => {
               try {
                 if (mode === "create") await createStoreAction(fd);
@@ -230,8 +304,8 @@ function StoreFormDrawer({
               } catch (err) {
                 toast.error((err as Error).message);
               }
-            })
-          }
+            });
+          }}
           className="mx-auto w-full max-w-md"
         >
           <DrawerHeader>
@@ -283,6 +357,26 @@ function StoreFormDrawer({
                 Si la completás, el comprador la ve en la lista compartida.
               </p>
             </div>
+            <div className="rounded-xl border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <EyeOff className="size-4 text-primary" />
+                  <Label htmlFor="store-exclude" className="cursor-pointer">
+                    No agregar automáticamente a listas nuevas
+                  </Label>
+                </div>
+                <Switch
+                  id="store-exclude"
+                  name="excludeFromAutoAdd-switch"
+                  checked={excludeFromAutoAdd}
+                  onCheckedChange={setExcludeFromAutoAdd}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ningún producto de este comercio se suma solo al crear una lista. Los productos
+                siguen en el maestro y se pueden agregar a mano.
+              </p>
+            </div>
           </div>
           <DrawerFooter>
             <Button type="submit" size="lg" disabled={pending} className="rounded-xl">
@@ -311,6 +405,9 @@ function CategoryFormDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [excludeFromAutoAdd, setExcludeFromAutoAdd] = useState(
+    category?.excludeFromAutoAdd ?? false,
+  );
   return (
     <Drawer open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
@@ -326,7 +423,8 @@ function CategoryFormDrawer({
       </DrawerTrigger>
       <DrawerContent>
         <form
-          action={(fd) =>
+          action={(fd) => {
+            if (excludeFromAutoAdd) fd.set("excludeFromAutoAdd", "on");
             startTransition(async () => {
               try {
                 if (mode === "create") await createCategoryAction(fd);
@@ -336,8 +434,8 @@ function CategoryFormDrawer({
               } catch (err) {
                 toast.error((err as Error).message);
               }
-            })
-          }
+            });
+          }}
           className="mx-auto w-full max-w-md"
         >
           <DrawerHeader>
@@ -373,6 +471,26 @@ function CategoryFormDrawer({
                 className="h-11 text-2xl text-center w-20"
                 maxLength={4}
               />
+            </div>
+            <div className="rounded-xl border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <EyeOff className="size-4 text-primary" />
+                  <Label htmlFor="cat-exclude" className="cursor-pointer">
+                    No agregar automáticamente a listas nuevas
+                  </Label>
+                </div>
+                <Switch
+                  id="cat-exclude"
+                  name="excludeFromAutoAdd-switch"
+                  checked={excludeFromAutoAdd}
+                  onCheckedChange={setExcludeFromAutoAdd}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ningún producto de esta categoría se suma solo al crear una lista. Siguen en el
+                maestro y se pueden agregar a mano.
+              </p>
             </div>
           </div>
           <DrawerFooter>
@@ -426,6 +544,45 @@ function RegenerateEmojiButton({
     >
       <Sparkles className="size-4" />
     </Button>
+  );
+}
+
+function ReorderControl({
+  onUp,
+  onDown,
+  isFirst,
+  isLast,
+  disabled,
+  label,
+}: {
+  onUp: () => void;
+  onDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  disabled: boolean;
+  label: string;
+}) {
+  return (
+    <div className="flex flex-col -my-1">
+      <button
+        type="button"
+        onClick={onUp}
+        disabled={disabled || isFirst}
+        aria-label={`Subir ${label}`}
+        className="inline-flex h-4 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors disabled:opacity-25 disabled:hover:bg-transparent"
+      >
+        <ChevronUp className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onDown}
+        disabled={disabled || isLast}
+        aria-label={`Bajar ${label}`}
+        className="inline-flex h-4 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors disabled:opacity-25 disabled:hover:bg-transparent"
+      >
+        <ChevronDown className="size-3.5" />
+      </button>
+    </div>
   );
 }
 

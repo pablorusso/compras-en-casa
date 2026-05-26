@@ -15,6 +15,12 @@ type Props = {
   size?: "sm" | "default" | "lg";
 };
 
+const iconSizeMap = {
+  sm: "icon-sm",
+  default: "icon",
+  lg: "icon-lg",
+} as const;
+
 export function CopyListButton({
   list,
   items,
@@ -35,11 +41,13 @@ export function CopyListButton({
   return (
     <Button
       variant={variant}
-      size={size}
+      size={iconSizeMap[size]}
       onClick={copyAll}
-      className={cn("rounded-2xl gap-1.5", className)}
+      aria-label="Copiar contenido"
+      title="Copiar contenido"
+      className={cn("rounded-2xl", className)}
     >
-      <Copy className="size-4" /> Copiar contenido
+      <Copy className="size-4" />
     </Button>
   );
 }

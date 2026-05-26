@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Pencil, Leaf } from "lucide-react";
+import { Plus, Pencil, Leaf, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { createProductAction, updateProductAction } from "@/actions/products";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,9 @@ export function ProductFormDrawer({
   const [pending, startTransition] = useTransition();
   const [isSeasonal, setIsSeasonal] = useState(product?.isSeasonal ?? false);
   const [selectedMonths, setSelectedMonths] = useState<number[]>(product?.seasonMonths ?? []);
+  const [excludeFromAutoAdd, setExcludeFromAutoAdd] = useState(
+    product?.excludeFromAutoAdd ?? false,
+  );
   const initialUnit = isCanonicalUnit(product?.defaultQuantityUnit ?? "")
     ? (product!.defaultQuantityUnit as CanonicalUnit)
     : ("unidad" as const);
@@ -93,6 +96,7 @@ export function ProductFormDrawer({
           action={(fd) => {
             for (const m of selectedMonths) fd.append("seasonMonths", String(m));
             if (isSeasonal) fd.set("isSeasonal", "on");
+            if (excludeFromAutoAdd) fd.set("excludeFromAutoAdd", "on");
             fd.set("defaultQuantityUnit", unit);
             startTransition(async () => {
               try {
@@ -255,6 +259,27 @@ export function ProductFormDrawer({
                   })}
                 </div>
               )}
+            </div>
+
+            <div className="rounded-xl border p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <EyeOff className="size-4 text-primary" />
+                  <Label htmlFor="p-exclude" className="cursor-pointer">
+                    No agregar automáticamente a listas nuevas
+                  </Label>
+                </div>
+                <Switch
+                  id="p-exclude"
+                  name="excludeFromAutoAdd-switch"
+                  checked={excludeFromAutoAdd}
+                  onCheckedChange={setExcludeFromAutoAdd}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Queda en el maestro pero no se suma solo al crear una lista. Si clonás una
+                lista que ya lo tiene, se mantiene; y podés agregarlo a mano cuando quieras.
+              </p>
             </div>
           </div>
           <DrawerFooter>

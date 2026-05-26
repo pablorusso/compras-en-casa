@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { stores, categories } from "@/db/schema";
+import { stores, categories, shoppingListItems } from "@/db/schema";
 import { generateEmoji } from "@/lib/emoji";
+import { getCurrentList } from "@/lib/lists";
 import { requireAdmin } from "@/lib/session";
 
 export async function createStoreAction(formData: FormData) {
@@ -12,9 +13,10 @@ export async function createStoreAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const emojiInput = String(formData.get("emoji") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim() || null;
+  const excludeFromAutoAdd = formData.get("excludeFromAutoAdd") === "on";
   if (!name) throw new Error("Nombre requerido");
   const emoji = emojiInput || (await generateEmoji("store", name)) || "🛒";
-  await db.insert(stores).values({ name, emoji, address });
+  await db.insert(stores).values({ name, emoji, address, excludeFromAutoAdd });
   revalidatePath("/admin/stores");
   revalidatePath("/admin");
 }
@@ -25,8 +27,12 @@ export async function updateStoreAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const emoji = String(formData.get("emoji") ?? "").trim() || "🛒";
   const address = String(formData.get("address") ?? "").trim() || null;
+  const excludeFromAutoAdd = formData.get("excludeFromAutoAdd") === "on";
   if (!id || !name) throw new Error("Datos inválidos");
-  await db.update(stores).set({ name, emoji, address }).where(eq(stores.id, id));
+  await db
+    .update(stores)
+    .set({ name, emoji, address, excludeFromAutoAdd })
+    .where(eq(stores.id, id));
   revalidatePath("/admin/stores");
 }
 
@@ -39,14 +45,43 @@ export async function deleteStoreAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+/**
+ * Persiste el orden de los comercios: el `sortOrder` de cada uno pasa a ser su
+ * índice en `orderedIds`. Además re-sincroniza el snapshot de la lista vigente
+ * para que el nuevo orden se vea de inmediato (las históricas quedan congeladas).
+ */
+export async function reorderStoresAction(orderedIds: number[]) {
+  await requireAdmin();
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) return;
+
+  const current = await getCurrentList();
+  for (let i = 0; i < orderedIds.length; i++) {
+    const id = orderedIds[i];
+    await db.update(stores).set({ sortOrder: i }).where(eq(stores.id, id));
+    if (current) {
+      await db
+        .update(shoppingListItems)
+        .set({ storeSortOrder: i })
+        .where(
+          and(eq(shoppingListItems.listId, current.id), eq(shoppingListItems.storeId, id)),
+        );
+    }
+  }
+
+  revalidatePath("/admin/stores");
+  revalidatePath("/admin");
+  revalidatePath("/admin/list");
+}
+
 export async function createCategoryAction(formData: FormData) {
   await requireAdmin();
   const storeId = Number(formData.get("storeId"));
   const name = String(formData.get("name") ?? "").trim();
   const emojiInput = String(formData.get("emoji") ?? "").trim();
+  const excludeFromAutoAdd = formData.get("excludeFromAutoAdd") === "on";
   if (!storeId || !name) throw new Error("Datos inválidos");
   const emoji = emojiInput || (await generateEmoji("category", name)) || "🛒";
-  await db.insert(categories).values({ storeId, name, emoji });
+  await db.insert(categories).values({ storeId, name, emoji, excludeFromAutoAdd });
   revalidatePath("/admin/stores");
 }
 
@@ -55,8 +90,12 @@ export async function updateCategoryAction(formData: FormData) {
   const id = Number(formData.get("id"));
   const name = String(formData.get("name") ?? "").trim();
   const emoji = String(formData.get("emoji") ?? "").trim() || "🛒";
+  const excludeFromAutoAdd = formData.get("excludeFromAutoAdd") === "on";
   if (!id || !name) throw new Error("Datos inválidos");
-  await db.update(categories).set({ name, emoji }).where(eq(categories.id, id));
+  await db
+    .update(categories)
+    .set({ name, emoji, excludeFromAutoAdd })
+    .where(eq(categories.id, id));
   revalidatePath("/admin/stores");
 }
 
@@ -66,6 +105,40 @@ export async function deleteCategoryAction(formData: FormData) {
   if (!id) throw new Error("ID requerido");
   await db.delete(categories).where(eq(categories.id, id));
   revalidatePath("/admin/stores");
+}
+
+/**
+ * Persiste el orden de las categorías de un comercio: el `sortOrder` de cada
+ * una pasa a ser su índice en `orderedIds`. Re-sincroniza el snapshot de la
+ * lista vigente (las históricas quedan congeladas).
+ */
+export async function reorderCategoriesAction(storeId: number, orderedIds: number[]) {
+  await requireAdmin();
+  if (!storeId || !Array.isArray(orderedIds) || orderedIds.length === 0) return;
+
+  const current = await getCurrentList();
+  for (let i = 0; i < orderedIds.length; i++) {
+    const id = orderedIds[i];
+    await db
+      .update(categories)
+      .set({ sortOrder: i })
+      .where(and(eq(categories.id, id), eq(categories.storeId, storeId)));
+    if (current) {
+      await db
+        .update(shoppingListItems)
+        .set({ categorySortOrder: i })
+        .where(
+          and(
+            eq(shoppingListItems.listId, current.id),
+            eq(shoppingListItems.categoryId, id),
+          ),
+        );
+    }
+  }
+
+  revalidatePath("/admin/stores");
+  revalidatePath("/admin");
+  revalidatePath("/admin/list");
 }
 
 export async function regenerateEmojiAction(formData: FormData) {

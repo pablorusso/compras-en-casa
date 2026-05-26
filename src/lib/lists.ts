@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   stores,
@@ -47,7 +47,13 @@ async function loadProductsWithContext(): Promise<ProductWithCtx[]> {
     .from(products)
     .innerJoin(stores, eq(products.storeId, stores.id))
     .leftJoin(categories, eq(products.categoryId, categories.id))
-    .where(eq(products.archived, false));
+    .where(eq(products.archived, false))
+    .orderBy(
+      asc(stores.sortOrder),
+      asc(stores.name),
+      asc(categories.sortOrder),
+      asc(products.name),
+    );
   return rows;
 }
 
@@ -75,8 +81,12 @@ export async function createListFromMaster(now: Date = new Date()) {
   await archiveCurrentList();
 
   const rows = await loadProductsWithContext();
-  const eligible = rows.filter((r) =>
-    isInSeason(r.product.isSeasonal, r.product.seasonMonths as number[] | null, now),
+  const eligible = rows.filter(
+    (r) =>
+      isInSeason(r.product.isSeasonal, r.product.seasonMonths as number[] | null, now) &&
+      !r.product.excludeFromAutoAdd &&
+      !r.store.excludeFromAutoAdd &&
+      !(r.category?.excludeFromAutoAdd ?? false),
   );
 
   const productIds = eligible.map((r) => r.product.id);
@@ -101,10 +111,12 @@ export async function createListFromMaster(now: Date = new Date()) {
           categoryId: r.category?.id ?? null,
           categoryName: r.category?.name ?? null,
           categoryEmoji: r.category?.emoji ?? null,
+          categorySortOrder: r.category?.sortOrder ?? 0,
           storeId: r.store.id,
           storeName: r.store.name,
           storeEmoji: r.store.emoji,
           storeAddress: r.store.address ?? null,
+          storeSortOrder: r.store.sortOrder,
           quantityValue: sug?.value ?? r.product.defaultQuantityValue,
           quantityUnit: sug?.unit ?? r.product.defaultQuantityUnit,
           notes: previousNotes.get(r.product.id) ?? null,
@@ -157,10 +169,12 @@ export async function cloneListToCurrent(
         categoryId: it.categoryId,
         categoryName: it.categoryName,
         categoryEmoji: it.categoryEmoji,
+        categorySortOrder: it.categorySortOrder,
         storeId: it.storeId,
         storeName: it.storeName,
         storeEmoji: it.storeEmoji,
         storeAddress: it.storeAddress,
+        storeSortOrder: it.storeSortOrder,
         quantityValue: it.quantityValue,
         quantityUnit: it.quantityUnit,
         notes: it.notes,
