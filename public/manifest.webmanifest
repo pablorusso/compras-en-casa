@@ -3,7 +3,7 @@
   "short_name": "Compras",
   "description": "Lista semanal de compras compartida para la familia",
   "start_url": "/admin",
-  "scope": "/",
+  "scope": "/admin",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#FFFBF0",

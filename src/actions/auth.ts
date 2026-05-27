@@ -41,7 +41,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
 export async function logoutAction() {
   const session = await getSession();
   session.destroy();
-  redirect("/login");
+  redirect("/admin/login");
 }
 
 export async function changePasswordAction(

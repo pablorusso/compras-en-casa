@@ -47,6 +47,6 @@ export async function requireAdmin(): Promise<void> {
   const ok = await isLoggedIn();
   if (!ok) {
     const { redirect } = await import("next/navigation");
-    redirect("/login");
+    redirect("/admin/login");
   }
 }

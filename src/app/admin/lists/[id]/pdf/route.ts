@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 type Params = { id: string };
 
 export async function GET(req: Request, ctx: { params: Promise<Params> }) {
-  await requireAdmin(); // sin sesión, redirige a /login (la pestaña nueva navega al login)
+  await requireAdmin(); // sin sesión, redirige a /admin/login (la pestaña nueva navega al login)
 
   const { id } = await ctx.params;
   const listId = Number(id);

@@ -5,7 +5,6 @@ import { Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useIsStandalone } from "@/lib/use-is-standalone";
 
 export function CopyableLinkRow({
   url,
@@ -16,8 +15,6 @@ export function CopyableLinkRow({
   external?: boolean;
   highlight?: boolean;
 }) {
-  const standalone = useIsStandalone();
-
   async function copy() {
     try {
       await navigator.clipboard.writeText(url);
@@ -52,18 +49,13 @@ export function CopyableLinkRow({
         <Copy className="size-4" />
       </Button>
       {external && (
+        // El link de /share queda fuera del `scope` de la PWA (scope: "/admin"),
+        // así que un ancla normal lo abre en Safari / el navegador del sistema
+        // tanto en iOS como en Android, en vez de atraparlo dentro de la app.
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => {
-            // En PWA standalone forzamos la apertura en el navegador por defecto:
-            // la página compartible no forma parte de la app instalada.
-            if (standalone) {
-              e.preventDefault();
-              window.open(url, "_blank", "noopener,noreferrer");
-            }
-          }}
           className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Abrir en nueva pestaña"
         >
