@@ -6,6 +6,7 @@ import { isLoggedIn } from "@/lib/session";
 import { ListView } from "@/components/list-view";
 import { CopyListButton } from "@/components/copy-list-button";
 import { PrintListButton } from "@/components/print-list-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ScrollToEdge } from "@/components/scroll-to-edge";
 import { Hourglass, LeafCorner, LostBag } from "@/components/illustrations";
 
@@ -92,6 +93,7 @@ export default async function SharePage({ params }: { params: Promise<Params> })
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <ThemeToggle />
           <CopyListButton list={res.list} items={items} variant="ghost" size="sm" />
           <PrintListButton
             pdfUrl={`/share/${token}/pdf`}
