@@ -12,6 +12,7 @@ import {
   shareLinks,
 } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
+import { getCurrentList } from "@/lib/lists";
 
 export type ResetCounts = {
   stores: number;
@@ -119,6 +120,67 @@ export async function resetAllBusinessDataAction(
   revalidatePath("/admin/list");
   revalidatePath("/admin/history");
   revalidatePath("/admin/import");
+  revalidatePath("/admin/settings");
+
+  return { ok: true };
+}
+
+// ─── Borrar todas las listas (conservando el maestro) ──────────────────────
+
+export type DeleteListsPreview = {
+  currentListName: string | null;
+  counts: { lists: number; items: number; shareLinks: number };
+};
+
+export async function getDeleteListsPreviewAction(): Promise<DeleteListsPreview> {
+  await requireAdmin();
+  const current = await getCurrentList();
+  const [l, i, sl] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(shoppingLists),
+    db.select({ n: sql<number>`count(*)::int` }).from(shoppingListItems),
+    db.select({ n: sql<number>`count(*)::int` }).from(shareLinks),
+  ]);
+  return {
+    currentListName: current?.name ?? null,
+    counts: {
+      lists: l[0]?.n ?? 0,
+      items: i[0]?.n ?? 0,
+      shareLinks: sl[0]?.n ?? 0,
+    },
+  };
+}
+
+export async function deleteAllListsAction(
+  formData: FormData,
+): Promise<ResetResult> {
+  await requireAdmin();
+
+  // La confirmación se valida contra la lista vigente real: si no hay vigente,
+  // la acción no tiene sentido (y el botón ni siquiera se muestra).
+  const current = await getCurrentList();
+  if (!current) return { error: "No hay lista vigente para borrar." };
+
+  const typed = String(formData.get("confirmName") ?? "").trim();
+  if (!typed) return { error: "Ingresá el nombre de la lista vigente." };
+  if (typed !== current.name.trim()) {
+    return {
+      error:
+        "El nombre no coincide con el de la lista vigente. " +
+        "Cerrá el diálogo y volvé a abrirlo si la lista cambió.",
+    };
+  }
+
+  // DELETE de shopping_lists cascadea a shopping_list_items y share_links
+  // (FKs onDelete: cascade en schema.ts) → los links quedan despublicados.
+  await db.delete(shoppingLists);
+
+  await db.execute(sql`ALTER SEQUENCE "shopping_lists_id_seq" RESTART WITH 1`);
+  await db.execute(sql`ALTER SEQUENCE "shopping_list_items_id_seq" RESTART WITH 1`);
+  await db.execute(sql`ALTER SEQUENCE "share_links_id_seq" RESTART WITH 1`);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/list");
+  revalidatePath("/admin/history");
   revalidatePath("/admin/settings");
 
   return { ok: true };

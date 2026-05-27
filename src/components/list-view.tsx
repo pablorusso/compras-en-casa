@@ -444,7 +444,7 @@ export function ListView({
               {!storeCollapsed && (
                 <div className="space-y-5 pl-1">
                   {store.directItems.length > 0 && (
-                    <ul className="space-y-2">
+                    <ul className="flex flex-col gap-2">
                       <AnimatePresence initial={false}>
                         {store.directItems.map((item) => renderItem(item))}
                       </AnimatePresence>
@@ -473,7 +473,7 @@ export function ListView({
                           </span>
                         </button>
                         {!catCollapsed && (
-                          <ul className="space-y-2">
+                          <ul className="flex flex-col gap-2">
                             <AnimatePresence initial={false}>
                               {cat.items.map((item) => renderItem(item))}
                             </AnimatePresence>

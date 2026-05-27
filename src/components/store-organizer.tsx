@@ -35,6 +35,7 @@ import {
   type PickerCategory,
 } from "@/components/category-picker-drawer";
 import { listItem } from "@/lib/motion";
+import { foldText } from "@/lib/text";
 import { cn } from "@/lib/utils";
 
 type OrganizerCategory = { id: number; name: string; emoji: string };
@@ -127,13 +128,13 @@ export function StoreOrganizer({
   }, [products, assignments, baseline, catById]);
 
   // Agrupación derivada: cada categoría con sus productos + bucket sin categoría.
-  const q = query.trim().toLowerCase();
+  const q = foldText(query.trim());
   // Con cambios pendientes podemos ocultar lo que no se modificó para revisar
   // de un vistazo qué hizo la IA (o uno mismo).
   const showOnlyChanged = onlyChanged && movedFrom.size > 0;
   const matches = (p: OrganizerProduct) => {
     if (showOnlyChanged && !movedFrom.has(p.id)) return false;
-    return !q || p.name.toLowerCase().includes(q);
+    return !q || foldText(p.name).includes(q);
   };
 
   const buckets = useMemo(() => {

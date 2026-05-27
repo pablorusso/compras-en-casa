@@ -63,7 +63,7 @@ export async function classifyProducts(
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: buildPrompt(storeName, cats, prods) },
       ],
-      temperature: 0.2,
+      temperature: 0.3,
       response_format: { type: "json_object" },
     });
     const text = completion.choices[0]?.message?.content ?? "";

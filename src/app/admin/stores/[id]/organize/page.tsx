@@ -6,7 +6,9 @@ import { db } from "@/db";
 import { stores, categories, products } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { LinkButton } from "@/components/ui/link-button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StoreOrganizer } from "@/components/store-organizer";
+import { CategoryOrganizer } from "@/components/category-organizer";
 
 type Params = { id: string };
 
@@ -67,7 +69,17 @@ export default async function OrganizeStorePage({
     id: c.id,
     name: c.name,
     emoji: c.emoji,
+    excludeFromAutoAdd: c.excludeFromAutoAdd,
   }));
+
+  // Conteo de productos por categoría (estado guardado), derivado de los
+  // productos ya cargados — sin queries extra.
+  const categoryCounts: Record<number, number> = {};
+  let uncategorizedCount = 0;
+  for (const p of prodRows) {
+    if (p.categoryId == null) uncategorizedCount++;
+    else categoryCounts[p.categoryId] = (categoryCounts[p.categoryId] ?? 0) + 1;
+  }
 
   return (
     <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-3xl mx-auto w-full">
@@ -83,16 +95,34 @@ export default async function OrganizeStorePage({
       <PageHeader
         eyebrow={`${store.emoji} ${store.name}`}
         title="Organizar comercio"
-        subtitle="Acomodá los productos en sus categorías. Probá con IA o movelos a mano; los cambios se aplican recién al guardar."
+        subtitle="Acomodá los productos en sus categorías o revisá la estructura de categorías del comercio."
       />
 
-      <StoreOrganizer
-        storeId={store.id}
-        storeName={store.name}
-        storeEmoji={store.emoji}
-        categories={categoryList}
-        products={prodRows}
-      />
+      <Tabs defaultValue="categories">
+        <TabsList className="w-full">
+          <TabsTrigger value="categories">Categorías</TabsTrigger>
+          <TabsTrigger value="products">Productos</TabsTrigger>
+        </TabsList>
+        <TabsContent value="categories" className="mt-4">
+          <CategoryOrganizer
+            storeId={store.id}
+            storeName={store.name}
+            storeEmoji={store.emoji}
+            categories={categoryList}
+            categoryCounts={categoryCounts}
+            uncategorizedCount={uncategorizedCount}
+          />
+        </TabsContent>
+        <TabsContent value="products" keepMounted className="mt-4">
+          <StoreOrganizer
+            storeId={store.id}
+            storeName={store.name}
+            storeEmoji={store.emoji}
+            categories={categoryList}
+            products={prodRows}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

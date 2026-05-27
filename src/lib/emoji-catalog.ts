@@ -1,3 +1,5 @@
+import { foldText } from "./text";
+
 export type EmojiEntry = {
   char: string;
   name: string;
@@ -247,29 +249,22 @@ export const EMOJI_CATALOG: EmojiEntry[] = [
   { char: "🌷", name: "tulipan", keywords: ["flor"] },
 ];
 
-function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
-
 export function searchEmojis(query: string, limit = 120): EmojiEntry[] {
-  const q = normalize(query.trim());
+  const q = foldText(query.trim());
   if (!q) return EMOJI_CATALOG.slice(0, limit);
 
   type Scored = { entry: EmojiEntry; score: number };
   const results: Scored[] = [];
 
   for (const entry of EMOJI_CATALOG) {
-    const name = normalize(entry.name);
+    const name = foldText(entry.name);
     let score = 0;
     if (name === q) score = 100;
     else if (name.startsWith(q)) score = 80;
     else if (name.includes(q)) score = 60;
     else {
       for (const kw of entry.keywords) {
-        const k = normalize(kw);
+        const k = foldText(kw);
         if (k === q) {
           score = Math.max(score, 70);
           break;

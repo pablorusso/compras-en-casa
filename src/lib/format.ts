@@ -1,4 +1,5 @@
 import { MONTHS_SHORT_ES } from "./seasonality";
+import { foldText } from "./text";
 import { canonicalize, eggNoun } from "./units";
 import type { ShoppingList, ShoppingListItem } from "@/db/schema";
 
@@ -70,12 +71,12 @@ export function filterItems(
   items: ShoppingListItem[],
   f: ListFilterValues,
 ): ShoppingListItem[] {
-  const q = f.query.trim().toLowerCase();
+  const q = foldText(f.query.trim());
   return items.filter((item) => {
     if (f.storeId != null && item.storeId !== f.storeId) return false;
     if (f.categoryId != null && item.categoryId !== f.categoryId) return false;
     if (!q) return true;
-    return item.productName.toLowerCase().includes(q);
+    return foldText(item.productName).includes(q);
   });
 }
 

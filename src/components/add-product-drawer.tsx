@@ -29,6 +29,7 @@ import {
   unitDisplay,
   type CanonicalUnit,
 } from "@/lib/units";
+import { foldText } from "@/lib/text";
 import { cn } from "@/lib/utils";
 
 export type AvailableProduct = {
@@ -75,13 +76,13 @@ export function AddProductDrawer({
   }, [available, lockedStoreId]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = foldText(query.trim());
     if (!q) return scoped;
     return scoped.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.categoryName.toLowerCase().includes(q) ||
-        p.storeName.toLowerCase().includes(q),
+        foldText(p.name).includes(q) ||
+        foldText(p.categoryName).includes(q) ||
+        foldText(p.storeName).includes(q),
     );
   }, [scoped, query]);
 

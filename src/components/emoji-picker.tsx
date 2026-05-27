@@ -18,9 +18,19 @@ type Props = {
   emoji: string;
   size?: "sm" | "lg";
   className?: string;
+  /** Se llama tras guardar el emoji; útil para `router.refresh()` en rutas que
+   * la `revalidatePath` de la acción no cubre (p. ej. organizar comercio). */
+  onChanged?: () => void;
 };
 
-export function EmojiButton({ kind, id, emoji, size = "sm", className }: Props) {
+export function EmojiButton({
+  kind,
+  id,
+  emoji,
+  size = "sm",
+  className,
+  onChanged,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
@@ -46,6 +56,7 @@ export function EmojiButton({ kind, id, emoji, size = "sm", className }: Props) 
         toast.success("Emoji actualizado");
         setOpen(false);
         setQuery("");
+        onChanged?.();
       } catch (err) {
         toast.error((err as Error).message);
       }

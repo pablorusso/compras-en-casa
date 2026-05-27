@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2, Upload, ArrowRight } from "lucide-react";
+import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2, Upload, ArrowRight, ListX } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { changePasswordAction, type AuthState } from "@/actions/auth";
 import { updateSettingsAction } from "@/actions/settings";
 import { ResetDataDialog } from "@/components/reset-data-dialog";
+import { DeleteListsDialog } from "@/components/delete-lists-dialog";
 import { cn } from "@/lib/utils";
 
 type SettingsValues = {
@@ -30,7 +31,13 @@ const WEEK_DAYS = [
   { value: 0, label: "Dom" },
 ] as const;
 
-export function SettingsForms({ settings }: { settings: SettingsValues }) {
+export function SettingsForms({
+  settings,
+  currentListName,
+}: {
+  settings: SettingsValues;
+  currentListName: string | null;
+}) {
   const [pending, startTransition] = useTransition();
   const [shoppingDays, setShoppingDays] = useState<number[]>(settings.shoppingDays);
 
@@ -202,6 +209,23 @@ export function SettingsForms({ settings }: { settings: SettingsValues }) {
             <TriangleAlert className="size-4 text-destructive" />
             <h2 className="font-semibold text-destructive">Zona peligrosa</h2>
           </div>
+          {currentListName && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Borrá todas las listas de compras (la vigente y las históricas) junto con sus
+                ítems y links compartibles. Se conserva el catálogo: comercios, categorías y
+                productos.
+              </p>
+              <DeleteListsDialog
+                trigger={
+                  <Button type="button" variant="honey" size="lg" className="rounded-xl w-full">
+                    <ListX className="size-4" />
+                    Borrar todas las listas
+                  </Button>
+                }
+              />
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
             Borrá todos los datos de negocio: comercios, categorías, productos, listas (vigente e
             históricas), ítems y links compartibles. Se conservan únicamente el password y las

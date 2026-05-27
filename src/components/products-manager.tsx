@@ -22,6 +22,7 @@ import { MONTHS_SHORT_ES } from "@/lib/seasonality";
 import { QuantityBadge } from "@/components/quantity-badge";
 import { MotionList } from "@/components/motion-card";
 import { listItem, tiltHover } from "@/lib/motion";
+import { foldText } from "@/lib/text";
 import { cn } from "@/lib/utils";
 
 export type ProductRow = {
@@ -61,7 +62,7 @@ export function ProductsManager({
   }, [storeFilter, categories]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = foldText(query.trim());
     return products.filter((p) => {
       if (storeFilter && p.storeId !== Number(storeFilter)) return false;
       if (categoryFilter && p.categoryId !== Number(categoryFilter)) return false;
@@ -69,9 +70,9 @@ export function ProductsManager({
       if (excludedFilter === "no" && p.excludeFromAutoAdd) return false;
       if (!q) return true;
       return (
-        p.name.toLowerCase().includes(q) ||
-        p.category?.name.toLowerCase().includes(q) ||
-        p.store.name.toLowerCase().includes(q)
+        foldText(p.name).includes(q) ||
+        (p.category ? foldText(p.category.name).includes(q) : false) ||
+        foldText(p.store.name).includes(q)
       );
     });
   }, [products, query, storeFilter, categoryFilter, excludedFilter]);

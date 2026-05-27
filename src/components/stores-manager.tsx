@@ -2,18 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Sparkles, EyeOff, LayoutGrid } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, Sparkles, EyeOff, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import {
   createStoreAction,
   updateStoreAction,
   deleteStoreAction,
-  createCategoryAction,
-  updateCategoryAction,
   deleteCategoryAction,
   regenerateEmojiAction,
   reorderStoresAction,
-  reorderCategoriesAction,
 } from "@/actions/stores";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
@@ -34,6 +31,8 @@ import {
 } from "@/components/ui/drawer";
 import { MotionList } from "@/components/motion-card";
 import { EmojiButton } from "@/components/emoji-picker";
+import { ReorderControl } from "@/components/reorder-control";
+import { CategoryFormDrawer } from "@/components/category-form-drawer";
 import { getStoreStyle } from "@/lib/store-style";
 import { listItem } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -75,20 +74,6 @@ export function StoresManager({ data }: { data: Store[] }) {
     startReorder(async () => {
       try {
         await reorderStoresAction(ids);
-      } catch (err) {
-        toast.error((err as Error).message);
-      }
-    });
-  }
-
-  function moveCategory(store: Store, index: number, dir: -1 | 1) {
-    const target = index + dir;
-    if (target < 0 || target >= store.categories.length) return;
-    const ids = store.categories.map((c) => c.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
-    startReorder(async () => {
-      try {
-        await reorderCategoriesAction(store.id, ids);
       } catch (err) {
         toast.error((err as Error).message);
       }
@@ -172,7 +157,7 @@ export function StoresManager({ data }: { data: Store[] }) {
                         size="icon"
                         className="size-8"
                         aria-label={`Organizar ${store.name}`}
-                        title="Organizar productos por categoría"
+                        title="Organizar categorías y productos"
                       >
                         <LayoutGrid className="size-4" />
                       </LinkButton>
@@ -216,19 +201,11 @@ export function StoresManager({ data }: { data: Store[] }) {
                             </p>
                           ) : (
                             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {store.categories.map((cat, catIndex) => (
+                              {store.categories.map((cat) => (
                                 <li
                                   key={cat.id}
                                   className="flex items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-3 py-2"
                                 >
-                                  <ReorderControl
-                                    onUp={() => moveCategory(store, catIndex, -1)}
-                                    onDown={() => moveCategory(store, catIndex, 1)}
-                                    isFirst={catIndex === 0}
-                                    isLast={catIndex === store.categories.length - 1}
-                                    disabled={reorderPending}
-                                    label="categoría"
-                                  />
                                   <EmojiButton
                                     kind="category"
                                     id={cat.id}
@@ -406,121 +383,6 @@ function StoreFormDrawer({
   );
 }
 
-function CategoryFormDrawer({
-  mode,
-  storeId,
-  category,
-}: {
-  mode: "create" | "edit";
-  storeId?: number;
-  category?: Cat;
-}) {
-  const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const [excludeFromAutoAdd, setExcludeFromAutoAdd] = useState(
-    category?.excludeFromAutoAdd ?? false,
-  );
-  return (
-    <Drawer open={open} onOpenChange={setOpen}>
-      <DrawerTrigger asChild>
-        {mode === "create" ? (
-          <Button variant="outline" className="w-full sm:flex-1 rounded-xl">
-            <Plus className="size-4" /> Agregar categoría
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon" className="size-8" aria-label="Editar categoría" title="Editar categoría">
-            <Pencil className="size-4" />
-          </Button>
-        )}
-      </DrawerTrigger>
-      <DrawerContent>
-        <form
-          action={(fd) => {
-            if (excludeFromAutoAdd) fd.set("excludeFromAutoAdd", "on");
-            startTransition(async () => {
-              try {
-                if (mode === "create") await createCategoryAction(fd);
-                else await updateCategoryAction(fd);
-                toast.success(mode === "create" ? "Categoría creada" : "Categoría actualizada");
-                setOpen(false);
-              } catch (err) {
-                toast.error((err as Error).message);
-              }
-            });
-          }}
-          className="mx-auto w-full max-w-md"
-        >
-          <DrawerHeader>
-            <DrawerTitle>
-              {mode === "create" ? "Nueva categoría" : "Editar categoría"}
-            </DrawerTitle>
-            <DrawerDescription>Carne, pollo, limpieza, frutas, lácteos…</DrawerDescription>
-          </DrawerHeader>
-          <div className="px-4 space-y-4">
-            {mode === "edit" && <input type="hidden" name="id" value={category!.id} />}
-            {mode === "create" && (
-              <input type="hidden" name="storeId" value={storeId} />
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="cat-name">Nombre</Label>
-              <Input
-                id="cat-name"
-                name="name"
-                defaultValue={category?.name ?? ""}
-                placeholder="Carne, Limpieza…"
-                required
-                autoFocus
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cat-emoji">Emoji</Label>
-              <Input
-                id="cat-emoji"
-                name="emoji"
-                defaultValue={category?.emoji ?? ""}
-                placeholder="Auto ✨"
-                className="h-11 text-2xl text-center w-20"
-                maxLength={4}
-              />
-            </div>
-            <div className="rounded-xl border p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <EyeOff className="size-4 text-primary" />
-                  <Label htmlFor="cat-exclude" className="cursor-pointer">
-                    No agregar automáticamente a listas nuevas
-                  </Label>
-                </div>
-                <Switch
-                  id="cat-exclude"
-                  name="excludeFromAutoAdd-switch"
-                  checked={excludeFromAutoAdd}
-                  onCheckedChange={setExcludeFromAutoAdd}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Ningún producto de esta categoría se suma solo al crear una lista. Siguen en el
-                maestro y se pueden agregar a mano.
-              </p>
-            </div>
-          </div>
-          <DrawerFooter>
-            <Button type="submit" size="lg" disabled={pending} className="rounded-xl">
-              {pending ? "Guardando…" : mode === "create" ? "Crear" : "Guardar"}
-            </Button>
-            <DrawerClose asChild>
-              <Button type="button" variant="ghost" size="lg">
-                Cancelar
-              </Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </form>
-      </DrawerContent>
-    </Drawer>
-  );
-}
-
 function RegenerateEmojiButton({
   kind,
   id,
@@ -557,47 +419,6 @@ function RegenerateEmojiButton({
     >
       <Sparkles className="size-4" />
     </Button>
-  );
-}
-
-function ReorderControl({
-  onUp,
-  onDown,
-  isFirst,
-  isLast,
-  disabled,
-  label,
-}: {
-  onUp: () => void;
-  onDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
-  disabled: boolean;
-  label: string;
-}) {
-  return (
-    <div className="flex flex-col -my-1">
-      <button
-        type="button"
-        onClick={onUp}
-        disabled={disabled || isFirst}
-        aria-label={`Subir ${label}`}
-        title={`Subir ${label}`}
-        className="inline-flex h-4 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors disabled:opacity-25 disabled:hover:bg-transparent"
-      >
-        <ChevronUp className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={onDown}
-        disabled={disabled || isLast}
-        aria-label={`Bajar ${label}`}
-        title={`Bajar ${label}`}
-        className="inline-flex h-4 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors disabled:opacity-25 disabled:hover:bg-transparent"
-      >
-        <ChevronDown className="size-3.5" />
-      </button>
-    </div>
   );
 }
 

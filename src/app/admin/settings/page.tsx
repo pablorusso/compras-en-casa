@@ -3,9 +3,11 @@ import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { SettingsForms } from "@/components/settings-forms";
+import { getCurrentList } from "@/lib/lists";
 
 export default async function SettingsPage() {
   const [row] = await db.select().from(settings).where(eq(settings.id, 1)).limit(1);
+  const currentList = await getCurrentList();
   const current = row ?? {
     id: 1,
     adminPasswordHash: null,
@@ -24,6 +26,7 @@ export default async function SettingsPage() {
           shareLinkTtlDays: current.shareLinkTtlDays,
           shoppingDays: current.shoppingDays,
         }}
+        currentListName={currentList?.name ?? null}
       />
     </div>
   );

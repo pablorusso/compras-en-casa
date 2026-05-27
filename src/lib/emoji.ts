@@ -41,8 +41,7 @@ export async function generateEmoji(
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: buildPrompt(kind, name) },
       ],
-      temperature: 0.7,
-      max_tokens: 512,
+      temperature: 0.8
     });
     const text = result.choices[0]?.message?.content ?? "";
     return extractEmoji(text);

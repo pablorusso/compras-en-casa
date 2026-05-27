@@ -341,7 +341,7 @@ export function ListEditor({
                 {!storeCollapsed && (
                   <div className="space-y-5 mt-3 pl-1">
                     {store.directItems.length > 0 && (
-                      <ul className="space-y-1.5">
+                      <ul className="flex flex-col gap-1.5">
                         <AnimatePresence initial={false}>
                           {store.directItems.map((item) => (
                             <motion.li
@@ -388,7 +388,7 @@ export function ListEditor({
                             </span>
                           </button>
                           {!catCollapsed && (
-                            <ul className="space-y-1.5">
+                            <ul className="flex flex-col gap-1.5">
                               <AnimatePresence initial={false}>
                                 {cat.items.map((item) => (
                                   <motion.li
