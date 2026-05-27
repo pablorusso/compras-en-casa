@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { db } from "@/db";
 import { shoppingLists } from "@/db/schema";
 import { getCurrentList, getListItems } from "@/lib/lists";
+import { derivePrintStores } from "@/lib/format";
 import { ListView } from "@/components/list-view";
 import { Card, CardContent } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
@@ -75,7 +76,11 @@ export default async function HistoryDetailPage({ params }: { params: Promise<Pa
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <CopyListButton list={list} items={items} size="lg" />
-              <PrintListButton pdfUrl={`/admin/lists/${list.id}/pdf`} size="lg" />
+              <PrintListButton
+                pdfUrl={`/admin/lists/${list.id}/pdf`}
+                stores={derivePrintStores(items)}
+                size="lg"
+              />
             </div>
             <CloneListButton
               sourceListId={list.id}

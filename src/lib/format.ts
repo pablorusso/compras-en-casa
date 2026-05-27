@@ -140,6 +140,59 @@ export function deriveListFilterOptions(items: ShoppingListItem[]): {
   return { storeOptions, categoryOptions };
 }
 
+export type PrintStoreOption = {
+  key: string;
+  id: number | null;
+  name: string;
+  emoji: string;
+};
+
+/** Key estable de un comercio para selección/filtrado: su id, o "none" si el ítem no tiene comercio. */
+function storeKey(storeId: number | null): string {
+  return storeId == null ? "none" : String(storeId);
+}
+
+/**
+ * Deriva los comercios presentes en una lista para el selector de impresión: un comercio por
+ * cada `storeId` distinto (los ítems sin comercio se agrupan bajo la key "none" como
+ * "Sin comercio"), ordenados igual que groupItems (sortOrder y luego nombre). Aprovecha los
+ * campos desnormalizados del ítem, así no hace falta cargar la tabla de comercios.
+ */
+export function derivePrintStores(items: ShoppingListItem[]): PrintStoreOption[] {
+  const stores = new Map<string, PrintStoreOption & { sortOrder: number }>();
+
+  for (const item of items) {
+    const key = storeKey(item.storeId);
+    if (!stores.has(key)) {
+      stores.set(key, {
+        key,
+        id: item.storeId,
+        name: item.storeName ?? "Sin comercio",
+        emoji: item.storeEmoji ?? "🛒",
+        sortOrder: item.storeSortOrder,
+      });
+    }
+  }
+
+  return Array.from(stores.values())
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "es"))
+    .map(({ key, id, name, emoji }) => ({ key, id, name, emoji }));
+}
+
+/**
+ * Filtra los ítems según las keys de comercio seleccionadas (param `stores` de la URL del PDF,
+ * separado por comas). Sin param o vacío devuelve todos los ítems (retrocompatibilidad).
+ */
+export function filterItemsByStoreKeys(
+  items: ShoppingListItem[],
+  param: string | null,
+): ShoppingListItem[] {
+  if (!param) return items;
+  const selected = new Set(param.split(",").map((k) => k.trim()).filter(Boolean));
+  if (selected.size === 0) return items;
+  return items.filter((it) => selected.has(storeKey(it.storeId)));
+}
+
 export function groupItems(items: ShoppingListItem[]): GroupedItems {
   const stores = new Map<
     string,

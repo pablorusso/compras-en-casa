@@ -1,6 +1,7 @@
 import { resolveShareLink } from "@/lib/share";
 import { getListItems } from "@/lib/lists";
 import { renderListPdf, pdfFileName } from "@/lib/pdf/render-list-pdf";
+import { filterItemsByStoreKeys } from "@/lib/format";
 
 // renderToBuffer es API de Node; igual que el HTML/JSON, se chequea expiración por request.
 export const runtime = "nodejs";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 type Params = { token: string };
 
-export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
+export async function GET(req: Request, ctx: { params: Promise<Params> }) {
   const { token } = await ctx.params;
   const res = await resolveShareLink(token);
 
@@ -20,7 +21,9 @@ export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
     return new Response("Gone", { status: 410 });
   }
 
-  const items = await getListItems(res.list.id);
+  // `stores` (keys separadas por coma) limita el PDF a esos comercios; sin él va la lista completa.
+  const storesParam = new URL(req.url).searchParams.get("stores");
+  const items = filterItemsByStoreKeys(await getListItems(res.list.id), storesParam);
   const pdf = await renderListPdf(res.list, items);
 
   return new Response(new Uint8Array(pdf), {

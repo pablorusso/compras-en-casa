@@ -16,6 +16,7 @@ import { NewListButton } from "@/components/new-list-button";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { ShareLinkSection } from "@/components/share-link-section";
 import { getCurrentList, getListItems } from "@/lib/lists";
+import { derivePrintStores } from "@/lib/format";
 import { getActiveShareLink } from "@/lib/share";
 import { getRequestOrigin } from "@/lib/origin";
 import { PageHeader } from "@/components/page-header";
@@ -119,7 +120,11 @@ export default async function AdminDashboard() {
                   <ArrowRight className="size-4" />
                 </LinkButton>
                 <CopyListButton list={current} items={currentItems} size="lg" />
-                <PrintListButton pdfUrl={`/admin/lists/${current.id}/pdf`} size="lg" />
+                <PrintListButton
+                  pdfUrl={`/admin/lists/${current.id}/pdf`}
+                  stores={derivePrintStores(currentItems)}
+                  size="lg"
+                />
               </div>
               <NewListButton
                 currentList={{ id: current.id, name: current.name }}

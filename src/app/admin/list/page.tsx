@@ -14,6 +14,7 @@ import { CopyListButton } from "@/components/copy-list-button";
 import { PrintListButton } from "@/components/print-list-button";
 import { HeroBasket } from "@/components/illustrations";
 import { getCurrentList, getListItems, getProductsNotInList } from "@/lib/lists";
+import { derivePrintStores } from "@/lib/format";
 import { getActiveShareLink } from "@/lib/share";
 import { getRequestOrigin } from "@/lib/origin";
 
@@ -141,7 +142,11 @@ export default async function ListPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <CopyListButton list={current} items={items} size="lg" />
-              <PrintListButton pdfUrl={`/admin/lists/${current.id}/pdf`} size="lg" />
+              <PrintListButton
+                pdfUrl={`/admin/lists/${current.id}/pdf`}
+                stores={derivePrintStores(items)}
+                size="lg"
+              />
             </div>
             <NewListButton
               currentList={{ id: current.id, name: current.name }}
