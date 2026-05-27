@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useIsStandalone } from "@/lib/use-is-standalone";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -24,33 +25,9 @@ function isIOSSafari(): boolean {
   return iOS && isSafari;
 }
 
-function isStandaloneNow(): boolean {
-  if (typeof window === "undefined") return false;
-  const mql = window.matchMedia("(display-mode: standalone)").matches;
-  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-  return mql || iosStandalone;
-}
-
-function subscribeStandalone(callback: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
-  const mql = window.matchMedia("(display-mode: standalone)");
-  mql.addEventListener("change", callback);
-  window.addEventListener("appinstalled", callback);
-  return () => {
-    mql.removeEventListener("change", callback);
-    window.removeEventListener("appinstalled", callback);
-  };
-}
-
-const ssrFalse = () => false;
-
-function useIsStandalone(): boolean {
-  return useSyncExternalStore(subscribeStandalone, isStandaloneNow, ssrFalse);
-}
-
 function useIsIOSSafari(): boolean {
   // El UA no cambia; useSyncExternalStore con un subscribe no-op nos da hidratación segura sin setState-in-effect.
-  return useSyncExternalStore(() => () => {}, isIOSSafari, ssrFalse);
+  return useSyncExternalStore(() => () => {}, isIOSSafari, () => false);
 }
 
 export function PwaInstaller({
