@@ -100,12 +100,6 @@ src/
 | `npm run db:generate` | generar migración SQL desde el schema |
 | `npm run db:studio` | UI web para inspeccionar la DB |
 
-## Roadmap (v2)
-
-- Precios sugeridos por producto vía API/scraping según ubicación (Belgrano, CABA por default).
-- Foto opcional por producto.
-- Métricas: cuánto sale la lista esta semana vs. promedio.
-
 ---
 
 Hecho con cariño para usar en familia 🛒

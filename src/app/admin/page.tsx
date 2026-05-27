@@ -3,17 +3,17 @@ import {
   ArrowRight,
   ListChecks,
   Package,
-  Sparkles,
   Store as StoreIcon,
   Tags,
 } from "lucide-react";
 import { db } from "@/db";
-import { stores, categories, products, shoppingListItems } from "@/db/schema";
+import { stores, categories, products, settings, shoppingListItems } from "@/db/schema";
 import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyListButton } from "@/components/copy-list-button";
 import { PrintListButton } from "@/components/print-list-button";
 import { NewListButton } from "@/components/new-list-button";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { ShareLinkSection } from "@/components/share-link-section";
 import { getCurrentList, getListItems } from "@/lib/lists";
 import { getActiveShareLink } from "@/lib/share";
@@ -36,6 +36,12 @@ export default async function AdminDashboard() {
     .select({ value: count() })
     .from(products)
     .where(eq(products.archived, false));
+  const [settingsRow] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.id, 1))
+    .limit(1);
+  const shoppingDaysSet = (settingsRow?.shoppingDays?.length ?? 0) > 0;
 
   const currentItems = current ? await getListItems(current.id) : [];
   const currentItemsCount = current
@@ -59,69 +65,34 @@ export default async function AdminDashboard() {
         subtitle="¿Qué vamos a comprar esta semana?"
       />
 
-      {!hasMaster && (
-        <Card tone="warm" className="mb-6 border-dashed">
-          <CardContent className="p-6 flex flex-col gap-4">
-            <div className="flex items-start gap-3">
-              <Sparkles className="size-5 text-primary shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-display text-xl font-semibold tracking-tight">
-                  Primer paso: cargá el maestro
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Antes de armar listas, creá comercios (supermercado, verdulería…), categorías y los
-                  productos que sueles comprar.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <LinkButton href="/admin/stores" className="rounded-xl">
-                <StoreIcon className="size-4" /> Comercios
-              </LinkButton>
-              <LinkButton href="/admin/products" variant="secondary" className="rounded-xl">
-                <Package className="size-4" /> Productos
-              </LinkButton>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="relative mb-7 overflow-hidden">
-        <HeroBasket
-          aria-hidden
-          className="absolute -right-4 -top-4 w-44 h-36 md:w-56 md:h-44 opacity-50 pointer-events-none"
+      {!current ? (
+        <OnboardingChecklist
+          shoppingDaysSet={shoppingDaysSet}
+          hasStores={storeCount > 0}
+          hasProducts={hasMaster}
+          hasCategories={catCount > 0}
         />
-        <CardContent className="relative p-6 md:p-7 pb-4 md:pb-5 flex flex-col gap-6">
-          <div className="pr-32 md:pr-48">
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
-              Lista
-            </p>
-            {current ? (
-              <>
-                <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight mt-1.5 break-words">
-                  {current.name}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {currentItemsCount}{" "}
-                  {currentItemsCount === 1 ? "producto" : "productos"} · creada el{" "}
-                  {current.createdAt.toLocaleDateString("es-AR", dateFmt)}
-                </p>
-              </>
-            ) : (
-              <>
-                <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight mt-1.5 break-words">
-                  {hasMaster ? "Empezá una nueva lista" : "Cargá el maestro primero"}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {hasMaster
-                    ? "Se cargan los productos del maestro con cantidades sugeridas según tus últimas compras."
-                    : "Antes de armar una lista, definí comercios y productos en el maestro."}
-                </p>
-              </>
-            )}
-          </div>
+      ) : (
+        <Card className="relative mb-7 overflow-hidden">
+          <HeroBasket
+            aria-hidden
+            className="absolute -right-4 -top-4 w-44 h-36 md:w-56 md:h-44 opacity-50 pointer-events-none"
+          />
+          <CardContent className="relative p-6 md:p-7 pb-4 md:pb-5 flex flex-col gap-6">
+            <div className="pr-32 md:pr-48">
+              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
+                Lista
+              </p>
+              <h2 className="font-display text-2xl md:text-3xl font-semibold tracking-tight leading-tight mt-1.5 break-words">
+                {current.name}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                {currentItemsCount}{" "}
+                {currentItemsCount === 1 ? "producto" : "productos"} · creada el{" "}
+                {current.createdAt.toLocaleDateString("es-AR", dateFmt)}
+              </p>
+            </div>
 
-          {current && (
             <ShareLinkSection
               key={current.id}
               listId={current.id}
@@ -135,46 +106,30 @@ export default async function AdminDashboard() {
                   : null
               }
             />
-          )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {current ? (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  <LinkButton
-                    href="/admin/list"
-                    size="lg"
-                    variant="tomato"
-                    className="rounded-2xl"
-                  >
-                    <ListChecks className="size-4" /> Editar
-                    <ArrowRight className="size-4" />
-                  </LinkButton>
-                  <CopyListButton list={current} items={currentItems} size="lg" />
-                  <PrintListButton list={current} items={currentItems} size="lg" />
-                </div>
-                <NewListButton
-                  currentList={{ id: current.id, name: current.name }}
-                  variant="outline"
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                <LinkButton
+                  href="/admin/list"
                   size="lg"
-                />
-              </>
-            ) : hasMaster ? (
-              <NewListButton currentList={null} />
-            ) : (
-              <LinkButton
-                href="/admin/products"
+                  variant="tomato"
+                  className="rounded-2xl"
+                >
+                  <ListChecks className="size-4" /> Editar
+                  <ArrowRight className="size-4" />
+                </LinkButton>
+                <CopyListButton list={current} items={currentItems} size="lg" />
+                <PrintListButton list={current} items={currentItems} size="lg" />
+              </div>
+              <NewListButton
+                currentList={{ id: current.id, name: current.name }}
+                variant="outline"
                 size="lg"
-                variant="tomato"
-                className="rounded-2xl"
-              >
-                <Sparkles className="size-4" /> Ir a Productos
-                <ArrowRight className="size-4" />
-              </LinkButton>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <MotionList className="grid grid-cols-3 gap-3">
         <StatCard
