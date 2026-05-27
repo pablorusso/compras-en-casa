@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { GripVertical, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,32 +24,46 @@ type OrganizerCategory = {
  * El nuevo orden se guarda de forma optimista al soltar; si falla, revierte al
  * estado del servidor.
  */
-export function CategoryReorderList({
-  storeId,
-  categories,
-  categoryCounts,
-  onRequestDelete,
-  onRefresh,
-}: {
+type Props = {
   storeId: number;
   categories: OrganizerCategory[];
   categoryCounts: Record<number, number>;
   onRequestDelete: (cat: { id: number; name: string }) => void;
   onRefresh: () => void;
-}) {
+};
+
+/**
+ * El estado de orden se deriva de las props. En vez de resincronizarlo con un effect
+ * (cascada de renders) o de escribir refs en render, se fuerza un remount con `key`
+ * cuando cambia el contenido de `categories` (alta/baja/edición/reorder confirmado):
+ * así el inner arranca siempre desde las props frescas con un estado limpio.
+ */
+export function CategoryReorderList(props: Props) {
+  const key = props.categories
+    .map((c) => `${c.id}-${c.name}-${c.emoji}-${c.excludeFromAutoAdd}`)
+    .join("|");
+  return <CategoryReorderListInner key={key} {...props} />;
+}
+
+function CategoryReorderListInner({
+  storeId,
+  categories,
+  categoryCounts,
+  onRequestDelete,
+  onRefresh,
+}: Props) {
   const [order, setOrder] = useState<OrganizerCategory[]>(categories);
   const [reorderPending, startReorder] = useTransition();
   // Ids ya persistidos: para no guardar si el drop deja todo igual.
   const committedRef = useRef<number[]>(categories.map((c) => c.id));
   // Orden más reciente, para leerlo desde el callback de onDragEnd sin closures stale.
+  // Se actualiza en handleReorder (no en render) para no violar la regla de refs.
   const orderRef = useRef(order);
-  orderRef.current = order;
 
-  // Resincroniza con las props cuando cambian (alta/baja/edición o refresh tras guardar).
-  useEffect(() => {
-    setOrder(categories);
-    committedRef.current = categories.map((c) => c.id);
-  }, [categories]);
+  function handleReorder(next: OrganizerCategory[]) {
+    orderRef.current = next;
+    setOrder(next);
+  }
 
   function persist() {
     const ids = orderRef.current.map((c) => c.id);
@@ -73,7 +87,7 @@ export function CategoryReorderList({
     <Reorder.Group
       axis="y"
       values={order}
-      onReorder={setOrder}
+      onReorder={handleReorder}
       as="div"
       className="space-y-2"
     >

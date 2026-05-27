@@ -75,7 +75,7 @@ export default async function HistoryDetailPage({ params }: { params: Promise<Pa
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <CopyListButton list={list} items={items} size="lg" />
-              <PrintListButton list={list} items={items} size="lg" />
+              <PrintListButton pdfUrl={`/admin/lists/${list.id}/pdf`} size="lg" />
             </div>
             <CloneListButton
               sourceListId={list.id}

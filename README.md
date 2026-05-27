@@ -27,7 +27,7 @@ App familiar para armar la lista semanal de compras y compartirla por WhatsApp/m
 - **Checkboxes** en la vista compartida (persisten en `localStorage` del comprador, no vuelven al server).
 - **Endpoint JSON** (`/share/[token]/json`) pensado para agentes/automatizaciones.
 - **Copiar al portapapeles**: texto plano agrupado por comercio/categoría, ideal para WhatsApp.
-- **Impresión en papel**: HTML compacto con paginación automática y casillas para tildar a mano.
+- **Impresión en papel**: PDF A4 generado en el servidor (`@react-pdf/renderer`), con paginación automática y casillas para tildar a mano. Se abre en el visor nativo, así sale igual en cualquier dispositivo (desktop, iOS Safari, PWA instalada) sin depender del motor de impresión del navegador.
 
 ### Otros
 - **Onboarding checklist** en el inicio que guía la configuración cuando no hay lista vigente.

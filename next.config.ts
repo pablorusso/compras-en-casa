@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // @react-pdf/renderer usa dependencias de Node (fuentes, fs) que no deben pasar por
+  // el bundler del server: se externaliza para que el render del PDF funcione en Vercel.
+  serverExternalPackages: ["@react-pdf/renderer"],
   async headers() {
     return [
       {

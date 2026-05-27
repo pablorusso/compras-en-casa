@@ -23,6 +23,15 @@ export async function getCurrentList() {
   return current ?? null;
 }
 
+export async function getListById(listId: number) {
+  const [list] = await db
+    .select()
+    .from(shoppingLists)
+    .where(eq(shoppingLists.id, listId))
+    .limit(1);
+  return list ?? null;
+}
+
 export async function getListItems(listId: number) {
   return db
     .select()

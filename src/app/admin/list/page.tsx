@@ -141,7 +141,7 @@ export default async function ListPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <CopyListButton list={current} items={items} size="lg" />
-              <PrintListButton list={current} items={items} size="lg" />
+              <PrintListButton pdfUrl={`/admin/lists/${current.id}/pdf`} size="lg" />
             </div>
             <NewListButton
               currentList={{ id: current.id, name: current.name }}

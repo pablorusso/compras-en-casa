@@ -92,7 +92,7 @@ export default async function SharePage({ params }: { params: Promise<Params> })
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <CopyListButton list={res.list} items={items} variant="ghost" size="sm" />
-          <PrintListButton list={res.list} items={items} variant="ghost" size="sm" />
+          <PrintListButton pdfUrl={`/share/${token}/pdf`} variant="ghost" size="sm" />
         </div>
       </header>
       <ListView

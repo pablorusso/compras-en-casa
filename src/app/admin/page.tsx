@@ -119,7 +119,7 @@ export default async function AdminDashboard() {
                   <ArrowRight className="size-4" />
                 </LinkButton>
                 <CopyListButton list={current} items={currentItems} size="lg" />
-                <PrintListButton list={current} items={currentItems} size="lg" />
+                <PrintListButton pdfUrl={`/admin/lists/${current.id}/pdf`} size="lg" />
               </div>
               <NewListButton
                 currentList={{ id: current.id, name: current.name }}
