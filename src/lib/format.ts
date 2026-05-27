@@ -3,10 +3,24 @@ import { canonicalize, eggNoun } from "./units";
 import type { ShoppingList, ShoppingListItem } from "@/db/schema";
 
 export function formatListDateName(date: Date = new Date()): string {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = MONTHS_SHORT_ES[date.getMonth()];
-  const yy = String(date.getFullYear()).slice(-2);
-  return `Lista del ${dd}/${mm}/${yy}`;
+  return `Lista ${date.getDate()}/${MONTHS_SHORT_ES[date.getMonth()]}`;
+}
+
+/**
+ * Devuelve el próximo día de compra a partir de `now`. Hoy cuenta: si la fecha
+ * actual cae en un día configurado, devuelve hoy. `shoppingDays` usa la
+ * convención de Date.getDay() (0 = Domingo … 6 = Sábado). Sin días configurados
+ * cae a hoy.
+ */
+export function getNextShoppingDate(shoppingDays: number[], now: Date = new Date()): Date {
+  if (!shoppingDays?.length) return now;
+  const set = new Set(shoppingDays);
+  for (let offset = 0; offset <= 7; offset++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + offset);
+    if (set.has(d.getDay())) return d;
+  }
+  return now;
 }
 
 export function prettyNumber(value: string | number): string {
@@ -283,6 +297,79 @@ export function buildMarkdownText(
     }
   }
   return lines.join("\n").trimEnd();
+}
+
+type ListJsonItem = {
+  productName: string;
+  quantityValue: number;
+  quantityUnit: string;
+  label: string;
+  notes: string | null;
+  store: string | null;
+  category: string | null;
+};
+
+export type ListJson = {
+  list: { name: string };
+  generatedAt: string;
+  hasPrices: false;
+  itemCount: number;
+  items: ListJsonItem[];
+  stores: {
+    store: string;
+    address: string | null;
+    directItems: ListJsonItem[];
+    categories: { category: string; items: ListJsonItem[] }[];
+  }[];
+};
+
+/**
+ * Serializa la lista a un objeto JSON pensado para consumo de agentes: un array
+ * plano de ítems (fácil de totalizar) más la misma estructura agrupada por
+ * comercio/categoría que la UI. No incluye precios porque la app no los almacena.
+ */
+export function buildListJson(
+  list: Pick<ShoppingList, "name">,
+  items: ShoppingListItem[],
+): ListJson {
+  const grouped = groupItems(items);
+
+  const toJsonItem = (item: ShoppingListItem): ListJsonItem => ({
+    productName: item.productName,
+    quantityValue: Number(item.quantityValue),
+    quantityUnit: item.quantityUnit,
+    label: formatItemLabel(item),
+    notes: item.notes ?? null,
+    store: item.storeName ?? null,
+    category: item.categoryName ?? null,
+  });
+
+  const stores = grouped
+    .filter((s) => s.directItems.length > 0 || s.categories.some((c) => c.items.length > 0))
+    .map((s) => ({
+      store: s.storeName,
+      address: s.storeAddress,
+      directItems: s.directItems.map(toJsonItem),
+      categories: s.categories
+        .filter((c) => c.items.length > 0)
+        .map((c) => ({ category: c.categoryName, items: c.items.map(toJsonItem) })),
+    }));
+
+  // Array plano siguiendo el mismo orden que el agrupado (comercio → directos → categorías).
+  const flat: ListJsonItem[] = [];
+  for (const s of stores) {
+    flat.push(...s.directItems);
+    for (const c of s.categories) flat.push(...c.items);
+  }
+
+  return {
+    list: { name: list.name },
+    generatedAt: new Date().toISOString(),
+    hasPrices: false,
+    itemCount: flat.length,
+    items: flat,
+    stores,
+  };
 }
 
 function escapeHtml(s: string): string {

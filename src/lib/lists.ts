@@ -11,7 +11,7 @@ import {
 } from "@/db/schema";
 import { isInSeason } from "./seasonality";
 import { getSuggestedQuantities } from "./quantities";
-import { formatListDateName } from "./format";
+import { formatListDateName, getNextShoppingDate } from "./format";
 
 export async function getCurrentList() {
   const [current] = await db
@@ -93,7 +93,7 @@ export async function createListFromMaster(now: Date = new Date()) {
   const suggested = await getSuggestedQuantities(productIds);
   const previousNotes = await getPreviousNotesByProductId(productIds);
 
-  const name = formatListDateName(now);
+  const name = await buildNewListName(now);
 
   const [list] = await db
     .insert(shoppingLists)
@@ -152,8 +152,7 @@ export async function cloneListToCurrent(
 
   await archiveCurrentList();
 
-  const base = formatListDateName(now);
-  const name = await resolveUniqueListName(base);
+  const name = await buildNewListName(now);
 
   const [created] = await db
     .insert(shoppingLists)
@@ -187,22 +186,37 @@ export async function cloneListToCurrent(
   return created;
 }
 
-// Si `base` ya existe, devuelve `base (copia)`, `base (copia 2)`, …
+// Lee los días de compra configurados (convención Date.getDay()).
+async function getShoppingDays(): Promise<number[]> {
+  const [cfg] = await db
+    .select({ shoppingDays: settings.shoppingDays })
+    .from(settings)
+    .where(eq(settings.id, 1))
+    .limit(1);
+  return cfg?.shoppingDays ?? [];
+}
+
+// Nombre de una lista nueva: "Lista DD/MMM" del próximo día de compra, con
+// sufijo secuencial si ya existe otra lista (vigente o histórica) con ese nombre.
+async function buildNewListName(now: Date): Promise<string> {
+  const target = getNextShoppingDate(await getShoppingDays(), now);
+  return resolveUniqueListName(formatListDateName(target));
+}
+
+// Si `base` ya existe, devuelve `base (2)`, `base (3)`, …
 async function resolveUniqueListName(base: string): Promise<string> {
-  const likePattern = base + " (copia%";
+  const likePattern = base + " (%";
   const rows = await db
     .select({ name: shoppingLists.name })
     .from(shoppingLists)
     .where(sql`${shoppingLists.name} = ${base} OR ${shoppingLists.name} LIKE ${likePattern}`);
   const taken = new Set(rows.map((r) => r.name));
   if (!taken.has(base)) return base;
-  const first = `${base} (copia)`;
-  if (!taken.has(first)) return first;
   for (let n = 2; n <= 99; n++) {
-    const candidate = `${base} (copia ${n})`;
+    const candidate = `${base} (${n})`;
     if (!taken.has(candidate)) return candidate;
   }
-  return `${base} (copia ${Date.now()})`;
+  return `${base} (${Date.now()})`;
 }
 
 // Trae las notas que tenían los productos `productIds` en la última lista

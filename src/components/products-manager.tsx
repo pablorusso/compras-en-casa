@@ -2,13 +2,14 @@
 
 import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Trash2, Search, Leaf, EyeOff, Eye } from "lucide-react";
+import { Trash2, Search, Leaf, EyeOff, Eye, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import {
   deleteProductAction,
   setProductExcludeFromAutoAddAction,
 } from "@/actions/products";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/link-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -136,6 +137,19 @@ export function ProductsManager({
           <option value="no">Sólo no excluidos</option>
         </select>
       </div>
+
+      {storeFilter && (
+        <div className="flex justify-end">
+          <LinkButton
+            href={`/admin/stores/${storeFilter}/organize`}
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+          >
+            <LayoutGrid className="size-4" /> Organizar comercio
+          </LinkButton>
+        </div>
+      )}
 
       {stores.length === 0 ? (
         <Card tone="warm" className="border-dashed p-8 text-center text-muted-foreground">

@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { products, categories } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
 import { canonicalize } from "@/lib/units";
+import { resolveAutoCategoryId } from "@/lib/classify";
 
 function parseSeasonMonths(formData: FormData): number[] {
   const raw = formData.getAll("seasonMonths");
@@ -78,7 +79,15 @@ async function fromForm(formData: FormData): Promise<CreateInput> {
 export async function createProductAction(formData: FormData) {
   await requireAdmin();
   const input = await fromForm(formData);
-  await db.insert(products).values(input);
+  // Si el usuario no eligió categoría, intentamos clasificarlo con IA (igual
+  // que el emoji autogenerado). Si el comercio no tiene categorías o la IA no
+  // sugiere una válida, queda sin categoría.
+  const categoryId = await resolveAutoCategoryId(
+    input.storeId,
+    input.name,
+    input.categoryId,
+  );
+  await db.insert(products).values({ ...input, categoryId });
   revalidatePath("/admin/products");
   revalidatePath("/admin");
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Sparkles, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Sparkles, EyeOff, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import {
   createStoreAction,
@@ -16,6 +16,7 @@ import {
   reorderCategoriesAction,
 } from "@/actions/stores";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,6 +166,16 @@ export function StoresManager({ data }: { data: Store[] }) {
                         id={store.id}
                         name={store.name}
                       />
+                      <LinkButton
+                        href={`/admin/stores/${store.id}/organize`}
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        aria-label={`Organizar ${store.name}`}
+                        title="Organizar productos por categoría"
+                      >
+                        <LayoutGrid className="size-4" />
+                      </LinkButton>
                       <StoreFormDrawer mode="edit" store={store} />
                       <DeleteButton
                         action={deleteStoreAction}
@@ -175,6 +186,7 @@ export function StoresManager({ data }: { data: Store[] }) {
                         type="button"
                         onClick={() => toggle(store.id)}
                         aria-label={isOpen ? "Colapsar" : "Expandir"}
+                        title={isOpen ? "Colapsar" : "Expandir"}
                         className="size-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors"
                       >
                         <ChevronDown
@@ -286,7 +298,7 @@ function StoreFormDrawer({
             <Plus className="size-4" /> Nuevo comercio
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="size-8" aria-label="Editar comercio">
+          <Button variant="ghost" size="icon" className="size-8" aria-label="Editar comercio" title="Editar comercio">
             <Pencil className="size-4" />
           </Button>
         )}
@@ -416,7 +428,7 @@ function CategoryFormDrawer({
             <Plus className="size-4" /> Agregar categoría
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="size-8" aria-label="Editar categoría">
+          <Button variant="ghost" size="icon" className="size-8" aria-label="Editar categoría" title="Editar categoría">
             <Pencil className="size-4" />
           </Button>
         )}
@@ -527,6 +539,7 @@ function RegenerateEmojiButton({
       className={cn("size-8", pending && "opacity-50")}
       disabled={pending}
       aria-label="Regenerar emoji con IA"
+      title="Regenerar emoji con IA"
       onClick={() => {
         const fd = new FormData();
         fd.set("kind", kind);
@@ -569,6 +582,7 @@ function ReorderControl({
         onClick={onUp}
         disabled={disabled || isFirst}
         aria-label={`Subir ${label}`}
+        title={`Subir ${label}`}
         className="inline-flex h-4 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors disabled:opacity-25 disabled:hover:bg-transparent"
       >
         <ChevronUp className="size-3.5" />
@@ -578,6 +592,7 @@ function ReorderControl({
         onClick={onDown}
         disabled={disabled || isLast}
         aria-label={`Bajar ${label}`}
+        title={`Bajar ${label}`}
         className="inline-flex h-4 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/40 transition-colors disabled:opacity-25 disabled:hover:bg-transparent"
       >
         <ChevronDown className="size-3.5" />
@@ -623,6 +638,7 @@ function DeleteButton({
         className={cn("size-8 text-destructive hover:text-destructive", pending && "opacity-50")}
         disabled={pending}
         aria-label="Eliminar"
+        title="Eliminar"
       >
         <Trash2 className="size-4" />
       </Button>

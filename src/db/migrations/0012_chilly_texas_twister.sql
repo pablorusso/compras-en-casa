@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "shopping_days" smallint[] DEFAULT '{}'::smallint[] NOT NULL;

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { RefreshCw, Ban, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { CopyableLink } from "@/components/copyable-link";
+import { CopyableLinkRow } from "@/components/copyable-link";
 import {
   createShareLinkAction,
   expireShareLinkAction,
@@ -54,6 +54,7 @@ export function ShareLinkSection({
   }
 
   const url = info ? `${origin}/share/${info.token}` : "";
+  const jsonUrl = info ? `${origin}/share/${info.token}/json` : "";
   const expiresLabel = info
     ? new Date(info.expiresAt).toLocaleString("es-AR", {
         dateStyle: "medium",
@@ -65,7 +66,7 @@ export function ShareLinkSection({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-          Link compartible
+          Links
         </p>
         <div className="flex items-center gap-1">
           {info && (
@@ -94,17 +95,20 @@ export function ShareLinkSection({
         </div>
       </div>
       {info ? (
-        <CopyableLink
-          url={url}
-          footer={
-            expiresLabel ? (
+        <div className="rounded-xl border bg-card p-3">
+          <div className="space-y-2">
+            <CopyableLinkRow url={url} highlight />
+            <CopyableLinkRow url={jsonUrl} />
+          </div>
+          {expiresLabel && (
+            <div className="mt-2 pt-2 border-t">
               <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <Clock className="size-3" />
                 Expira el {expiresLabel}
               </p>
-            ) : undefined
-          }
-        />
+            </div>
+          )}
+        </div>
       ) : (
         <p className="rounded-xl border border-dashed bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
           Sin link activo. Generá uno para compartir esta lista por un período acotado.

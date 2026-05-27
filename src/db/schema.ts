@@ -140,6 +140,12 @@ export const settings = pgTable(
     adminPasswordHash: text("admin_password_hash"),
     historyLimit: integer("history_limit").notNull().default(10),
     shareLinkTtlDays: integer("share_link_ttl_days").notNull().default(30),
+    // Días de la semana en que se hace la compra (convención Date.getDay():
+    // 0 = Domingo … 6 = Sábado). Define la fecha del nombre de la lista nueva.
+    shoppingDays: smallint("shopping_days")
+      .array()
+      .notNull()
+      .default(sql`'{}'::smallint[]`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("settings_singleton_chk", sql`${t.id} = 1`)],

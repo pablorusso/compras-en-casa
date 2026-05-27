@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2, Upload, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,14 +11,33 @@ import { Label } from "@/components/ui/label";
 import { changePasswordAction, type AuthState } from "@/actions/auth";
 import { updateSettingsAction } from "@/actions/settings";
 import { ResetDataDialog } from "@/components/reset-data-dialog";
+import { cn } from "@/lib/utils";
 
 type SettingsValues = {
   historyLimit: number;
   shareLinkTtlDays: number;
+  shoppingDays: number[];
 };
+
+// Convención Date.getDay(): 0 = Domingo … 6 = Sábado. Mostrados Lun→Dom.
+const WEEK_DAYS = [
+  { value: 1, label: "Lun" },
+  { value: 2, label: "Mar" },
+  { value: 3, label: "Mié" },
+  { value: 4, label: "Jue" },
+  { value: 5, label: "Vie" },
+  { value: 6, label: "Sáb" },
+  { value: 0, label: "Dom" },
+] as const;
 
 export function SettingsForms({ settings }: { settings: SettingsValues }) {
   const [pending, startTransition] = useTransition();
+  const [shoppingDays, setShoppingDays] = useState<number[]>(settings.shoppingDays);
+
+  const toggleDay = (value: number) =>
+    setShoppingDays((prev) =>
+      prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value],
+    );
 
   const [pwdState, pwdAction] = useActionState<AuthState, FormData>(
     async (prev, fd) => {
@@ -78,6 +97,37 @@ export function SettingsForms({ settings }: { settings: SettingsValues }) {
               />
               <p className="text-xs text-muted-foreground">
                 Cuántos días dura el link compartible que generás para la lista vigente.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Días de compra</Label>
+              <div className="flex flex-wrap gap-2">
+                {WEEK_DAYS.map((day) => {
+                  const selected = shoppingDays.includes(day.value);
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleDay(day.value)}
+                      className={cn(
+                        "h-11 min-w-12 flex-1 rounded-xl border text-sm font-medium transition-colors",
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-input bg-background text-foreground hover:bg-accent",
+                      )}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {shoppingDays.map((d) => (
+                <input key={d} type="hidden" name="shoppingDays" value={d} />
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Días en que hacés la compra. El nombre de cada lista nueva usará la fecha del
+                próximo día de compra (hoy incluido si coincide).
               </p>
             </div>
             <Button type="submit" size="lg" className="rounded-xl w-full" disabled={pending}>

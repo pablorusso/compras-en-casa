@@ -11,6 +11,7 @@ export default async function SettingsPage() {
     adminPasswordHash: null,
     historyLimit: 10,
     shareLinkTtlDays: 30,
+    shoppingDays: [],
     updatedAt: new Date(),
   };
 
@@ -21,6 +22,7 @@ export default async function SettingsPage() {
         settings={{
           historyLimit: current.historyLimit,
           shareLinkTtlDays: current.shareLinkTtlDays,
+          shoppingDays: current.shoppingDays,
         }}
       />
     </div>

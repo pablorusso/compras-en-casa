@@ -1,20 +1,4 @@
-import OpenAI from "openai";
-
-const MODEL = "openai/gpt-oss-120b";
-const BASE_URL = "https://api.groq.com/openai/v1";
-
-let client: OpenAI | null = null;
-
-function getClient(): OpenAI | null {
-  if (!process.env.GROQ_API_KEY) return null;
-  if (!client) {
-    client = new OpenAI({
-      apiKey: process.env.GROQ_API_KEY,
-      baseURL: BASE_URL,
-    });
-  }
-  return client;
-}
+import { AI_MODEL, getAiClient } from "@/lib/ai";
 
 const EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 
@@ -48,11 +32,11 @@ export async function generateEmoji(
   kind: EmojiKind,
   name: string,
 ): Promise<string | null> {
-  const ai = getClient();
+  const ai = getAiClient();
   if (!ai) return null;
   try {
     const result = await ai.chat.completions.create({
-      model: MODEL,
+      model: AI_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: buildPrompt(kind, name) },

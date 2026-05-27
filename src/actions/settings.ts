@@ -13,12 +13,21 @@ export async function updateSettingsAction(formData: FormData) {
     1,
     Math.min(365, Number(formData.get("shareLinkTtlDays")) || 30),
   );
+  const shoppingDays = [
+    ...new Set(
+      formData
+        .getAll("shoppingDays")
+        .map((v) => Number(v))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6),
+    ),
+  ].sort((a, b) => a - b);
 
   await db
     .update(settings)
     .set({
       historyLimit,
       shareLinkTtlDays,
+      shoppingDays,
       updatedAt: new Date(),
     })
     .where(eq(settings.id, 1));

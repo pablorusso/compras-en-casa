@@ -19,6 +19,7 @@ import {
 } from "@/lib/lists";
 import { createShareLink } from "@/lib/share";
 import { canonicalize } from "@/lib/units";
+import { resolveAutoCategoryId } from "@/lib/classify";
 
 function revalidateListPaths() {
   revalidatePath("/admin");
@@ -158,7 +159,7 @@ export async function createAndAddProductAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const storeId = Number(formData.get("storeId"));
   const catRaw = String(formData.get("categoryId") ?? "").trim();
-  const categoryId = catRaw ? Number(catRaw) : null;
+  let categoryId = catRaw ? Number(catRaw) : null;
   const quantityRaw = String(formData.get("defaultQuantityValue") ?? "1");
   const rawUnit = String(formData.get("defaultQuantityUnit") ?? "unidad").trim();
   if (!name || !storeId || !rawUnit) throw new Error("Datos incompletos");
@@ -174,6 +175,12 @@ export async function createAndAddProductAction(formData: FormData) {
     .where(eq(stores.id, storeId))
     .limit(1);
   if (!store) throw new Error("Comercio no encontrado");
+
+  // Si no se eligió categoría, intentamos clasificar con IA (igual que en el
+  // maestro). El id resuelto se valida más abajo contra el comercio.
+  if (categoryId == null) {
+    categoryId = await resolveAutoCategoryId(storeId, name, null);
+  }
 
   let cat: typeof categories.$inferSelect | null = null;
   if (categoryId) {
