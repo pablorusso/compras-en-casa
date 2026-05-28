@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { ProgressBar } from "@/components/progress-bar";
 import { QuantityBadge } from "@/components/quantity-badge";
 import { SectionHeading } from "@/components/section-heading";
-import { groupItems } from "@/lib/format";
+import { filterItems, groupItems } from "@/lib/format";
 import { ListFilterSelects } from "@/components/list-filter-selects";
 import { useListFilters } from "@/lib/use-list-filters";
 import { getStoreStyle } from "@/lib/store-style";
 import { useHasMounted } from "@/lib/use-has-mounted";
+import { useIsTouch } from "@/lib/use-is-touch";
 import type { ShoppingListItem } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +63,20 @@ function loadMarks(storageKey?: string, mode?: Mode): Map<number, ItemStatus> {
   }
 }
 
+/**
+ * Primer ítem en el orden agrupado (comercio → categoría) de una lista ya
+ * filtrada. Es el "match primario" sobre el que actúa el buscador (Enter y los
+ * botones Comprado/No hay), aunque queden varios resultados.
+ */
+function firstVisible(its: ShoppingListItem[]): ShoppingListItem | null {
+  for (const store of groupItems(its)) {
+    if (store.directItems.length > 0) return store.directItems[0];
+    for (const cat of store.categories)
+      if (cat.items.length > 0) return cat.items[0];
+  }
+  return null;
+}
+
 export function ListView({
   items,
   mode = "view",
@@ -87,7 +102,31 @@ export function ListView({
   const isSearching = query.trim().length > 0;
   const hasMounted = useHasMounted();
   const reduced = useReducedMotion();
+  const isTouch = useIsTouch();
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // En touch, al enfocar el buscador colapsamos los controles internos
+  // (progreso + tabs + filtros) para reclamar espacio vertical cuando se abre el
+  // teclado, aún sin texto. El colapso se difiere ~300ms: si el layout reflowea
+  // junto con la apertura del teclado, el navegador móvil suelta el foco del
+  // input. En desktop solo colapsa al tipear (isSearching).
+  const [searchFocused, setSearchFocused] = useState(false);
+  const focusCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchFocus = useCallback(() => {
+    if (focusCollapseTimer.current) clearTimeout(focusCollapseTimer.current);
+    focusCollapseTimer.current = setTimeout(() => setSearchFocused(true), 300);
+  }, []);
+  const handleSearchBlur = useCallback(() => {
+    if (focusCollapseTimer.current) clearTimeout(focusCollapseTimer.current);
+    setSearchFocused(false);
+  }, []);
+  useEffect(
+    () => () => {
+      if (focusCollapseTimer.current) clearTimeout(focusCollapseTimer.current);
+    },
+    [],
+  );
+  const searchActive = isSearching || (isTouch && searchFocused);
 
   const [marks, setMarks] = useState<Map<number, ItemStatus>>(() =>
     loadMarks(storageKey, mode),
@@ -121,7 +160,30 @@ export function ListView({
 
   const grouped = useMemo(() => groupItems(displayedItems), [displayedItems]);
   const filteredCount = displayedItems.length;
-  const singleItem = displayedItems.length === 1 ? displayedItems[0] : null;
+  // Match primario: primer ítem del resultado en orden agrupado. Es sobre el que
+  // actúan Enter y los botones Comprado/No hay, aunque haya varios resultados.
+  const primaryItem = useMemo(() => firstVisible(displayedItems), [displayedItems]);
+  const primaryId = primaryItem?.id ?? null;
+
+  // Recalcula el primer match con el `query` en vivo (sin esperar el debounce),
+  // replicando el pipeline de `displayedItems`. Lo usa Enter para actuar al
+  // instante apenas se tipea, igual que el editor.
+  const livePrimary = useCallback((): ShoppingListItem | null => {
+    const filtered = filterItems(items, {
+      query,
+      storeId: storeFilter ? Number(storeFilter) : null,
+      categoryId: categoryFilter ? Number(categoryFilter) : null,
+    });
+    const scoped =
+      !isShopping || statusFilter === "all"
+        ? filtered
+        : filtered.filter((item) => {
+            const s = displayedMarks.get(item.id);
+            if (statusFilter === "pending") return s === undefined;
+            return s === statusFilter;
+          });
+    return firstVisible(scoped);
+  }, [items, query, storeFilter, categoryFilter, isShopping, statusFilter, displayedMarks]);
 
   function afterMark() {
     // En la vista de pendientes, al marcar un producto buscado este desaparece;
@@ -179,17 +241,27 @@ export function ListView({
   const progress = items.length === 0 ? 0 : Math.round((resolvedCount / items.length) * 100);
 
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && isShopping && isSearching && singleItem) {
+    if (e.key === "Escape") {
       e.preventDefault();
-      toggleBought(singleItem.id);
+      setQuery("");
+      searchRef.current?.blur();
+      return;
+    }
+    if (e.key === "Enter" && isShopping && isSearching) {
+      e.preventDefault();
+      const target = livePrimary();
+      if (target) toggleBought(target.id);
     }
   }
 
-  function renderItem(item: ShoppingListItem) {
+  function renderItem(item: ShoppingListItem, showCategory = false) {
     const status = displayedMarks.get(item.id);
     const isBought = status === "bought";
     const isMissing = status === "missing";
     const dimmed = isBought || isMissing;
+    // Solo con búsqueda activa resaltamos el primer match (sobre el que actúan
+    // Enter y los botones Comprado/No hay).
+    const isPrimary = isShopping && isSearching && item.id === primaryId;
 
     const body = (
       <>
@@ -243,14 +315,21 @@ export function ListView({
               !status && "border-border/70 bg-card",
               isBought && "border-border/50 bg-muted/50 shadow-none",
               isMissing && "border-destructive/25 bg-destructive/5 shadow-none",
+              isPrimary && "border-2 border-primary",
             )}
           >
             <button
               type="button"
               onClick={() => toggleBought(item.id)}
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-l-2xl px-3.5 py-2 text-left transition-colors hover:bg-muted/40 active:scale-[0.99]"
+              className={cn(
+                "relative flex min-w-0 flex-1 items-center gap-3 rounded-l-2xl px-3.5 text-left transition-colors hover:bg-muted/40 active:scale-[0.99]",
+                showCategory ? "pt-2 pb-5" : "py-2",
+              )}
             >
               {body}
+              {showCategory && (
+                <CategoryTag emoji={item.categoryEmoji} name={item.categoryName} />
+              )}
             </button>
             <button
               type="button"
@@ -266,8 +345,16 @@ export function ListView({
             </button>
           </div>
         ) : (
-          <div className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-2 shadow-soft">
+          <div
+            className={cn(
+              "relative flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card px-3.5 shadow-soft",
+              showCategory ? "pt-2 pb-5" : "py-2",
+            )}
+          >
             {body}
+            {showCategory && (
+              <CategoryTag emoji={item.categoryEmoji} name={item.categoryName} />
+            )}
           </div>
         )}
       </motion.li>
@@ -277,7 +364,12 @@ export function ListView({
   return (
     <div className="space-y-6">
       {isShopping && (
-        <div className="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-soft backdrop-blur-sm">
+        <div
+          className={cn(
+            "rounded-2xl border border-border/70 bg-card/80 p-4 shadow-soft backdrop-blur-sm",
+            searchActive && "hidden",
+          )}
+        >
           <div className="flex items-center justify-between text-sm mb-2.5">
             <span className="text-muted-foreground">Tu progreso</span>
             <span className="font-medium tabular-nums">
@@ -289,59 +381,74 @@ export function ListView({
       )}
 
       {items.length > 0 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-primary" />
-          <Input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder="Buscar producto…"
-            className={cn("h-11 rounded-2xl pl-10", isSearching ? "pr-24" : "pr-10")}
-          />
-          {isSearching && (
-            <div className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {filteredCount}/{items.length}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7 rounded-full text-muted-foreground hover:text-foreground"
-                onClick={() => setQuery("")}
-                aria-label="Limpiar búsqueda"
-              >
-                <X className="size-3.5" />
-              </Button>
-            </div>
-          )}
+        <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-1.5 bg-background/90 backdrop-blur-sm">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-primary" />
+            <Input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
+              placeholder="Buscar producto…"
+              className={cn("h-11 rounded-2xl pl-10", isSearching ? "pr-24" : "pr-10")}
+            />
+            {isSearching && (
+              <div className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {filteredCount}/{items.length}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 rounded-full text-muted-foreground hover:text-foreground"
+                  onClick={() => setQuery("")}
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {isShopping && isSearching && singleItem && (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="lime"
-            className="flex-1 gap-1.5 rounded-2xl"
-            onClick={() => toggleBought(singleItem.id)}
-          >
-            <Check className="size-4" /> Comprado
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 gap-1.5 rounded-2xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => toggleMissing(singleItem.id)}
-          >
-            <Ban className="size-4" /> No hay
-          </Button>
+      {isShopping && isSearching && primaryItem && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Acción sobre{" "}
+            <span className="font-medium text-foreground">{primaryItem.productName}</span>
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="lime"
+              className="flex-1 gap-1.5 rounded-2xl"
+              onClick={() => toggleBought(primaryItem.id)}
+            >
+              <Check className="size-4" /> Comprado
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 gap-1.5 rounded-2xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => toggleMissing(primaryItem.id)}
+            >
+              <Ban className="size-4" /> No hay
+            </Button>
+          </div>
         </div>
       )}
 
       {isShopping && (
-        <div className="grid grid-cols-4 gap-1 rounded-2xl border border-border/70 bg-muted/40 p-1">
+        <div
+          className={cn(
+            "grid grid-cols-4 gap-1 rounded-2xl border border-border/70 bg-muted/40 p-1",
+            searchActive && "hidden",
+          )}
+        >
           {STATUS_TABS.map((tab) => {
             const active = statusFilter === tab.value;
             return (
@@ -365,14 +472,16 @@ export function ListView({
       )}
 
       {items.length > 0 && storeOptions.length > 0 && (
-        <ListFilterSelects
-          storeOptions={storeOptions}
-          filterCats={filterCats}
-          storeFilter={storeFilter}
-          categoryFilter={categoryFilter}
-          onStoreChange={selectStore}
-          onCategoryChange={setCategoryFilter}
-        />
+        <div className={cn(isShopping && searchActive && "hidden")}>
+          <ListFilterSelects
+            storeOptions={storeOptions}
+            filterCats={filterCats}
+            storeFilter={storeFilter}
+            categoryFilter={categoryFilter}
+            onStoreChange={selectStore}
+            onCategoryChange={setCategoryFilter}
+          />
+        </div>
       )}
 
       {grouped.length === 0 && items.length > 0 && (
@@ -392,7 +501,7 @@ export function ListView({
         </Card>
       )}
 
-      <ul className="space-y-8">
+      <ul className="space-y-6">
         {grouped.map((store) => {
           const sKey = String(store.storeId ?? store.storeName);
           const storeCollapsed = isFiltering ? false : collapsedStores.has(sKey);
@@ -407,81 +516,109 @@ export function ListView({
                 onClick={() => toggleStore(sKey)}
                 aria-expanded={!storeCollapsed}
                 className={cn(
-                  "group flex w-full items-start gap-2 text-left outline-none rounded-xl -mx-1 px-1 py-1 transition hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40",
-                  store.storeAddress ? "mb-2" : "mb-4",
+                  "group flex w-full min-w-0 items-center gap-2 text-left outline-none rounded-xl -mx-1 px-1 py-0.5 transition hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40",
+                  store.storeAddress ? "mb-2" : "mb-3",
                 )}
               >
                 <ChevronDown
                   className={cn(
-                    "mt-4 size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform",
+                    "size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform",
                     storeCollapsed && "-rotate-90",
                   )}
                   aria-hidden
                 />
                 <SectionHeading
                   title={store.storeName}
-                  eyebrow={`${storeCount} ${storeCount === 1 ? "producto" : "productos"}`}
+                  size="sm"
                   illustration={
                     <div
                       className={cn(
-                        "flex size-12 items-center justify-center rounded-2xl ring-1",
+                        "flex items-center justify-center rounded-xl ring-1",
+                        searchActive ? "size-6" : "size-8",
                         style.tint,
                         style.ring,
                       )}
                     >
-                      <span className="text-3xl leading-none">{store.storeEmoji}</span>
+                      <span
+                        className={cn("leading-none", searchActive ? "text-base" : "text-xl")}
+                      >
+                        {store.storeEmoji}
+                      </span>
                     </div>
+                  }
+                  meta={
+                    searchActive ? undefined : (
+                      <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">
+                        {storeCount} {storeCount === 1 ? "producto" : "productos"}
+                      </span>
+                    )
                   }
                   className="flex-1"
                 />
               </button>
               {store.storeAddress && !storeCollapsed && (
-                <p className="mb-4 ml-[60px] flex items-center gap-1.5 text-sm text-muted-foreground">
+                <p className="mb-3 ml-[60px] flex items-center gap-1.5 text-sm text-muted-foreground">
                   <MapPin className="size-3.5 shrink-0" aria-hidden />
                   <span>{store.storeAddress}</span>
                 </p>
               )}
               {!storeCollapsed && (
-                <div className="space-y-5 pl-1">
-                  {store.directItems.length > 0 && (
+                <div className={cn("pl-1", !searchActive && "space-y-5")}>
+                  {searchActive ? (
+                    // Modo búsqueda: aplanamos las categorías; cada producto
+                    // muestra su categoría en el card (CategoryTag) y se gana
+                    // alto vertical para ver más resultados con el teclado.
                     <ul className="flex flex-col gap-2">
                       <AnimatePresence initial={false}>
-                        {store.directItems.map((item) => renderItem(item))}
+                        {[
+                          ...store.directItems,
+                          ...store.categories.flatMap((c) => c.items),
+                        ].map((item) => renderItem(item, true))}
                       </AnimatePresence>
                     </ul>
+                  ) : (
+                    <>
+                      {store.directItems.length > 0 && (
+                        <ul className="flex flex-col gap-2">
+                          <AnimatePresence initial={false}>
+                            {store.directItems.map((item) => renderItem(item))}
+                          </AnimatePresence>
+                        </ul>
+                      )}
+                      {store.categories.map((cat) => {
+                        const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
+                        const catCollapsed = isFiltering ? false : collapsedCats.has(cKey);
+                        return (
+                          <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
+                            <button
+                              type="button"
+                              onClick={() => toggleCat(cKey)}
+                              aria-expanded={!catCollapsed}
+                              className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
+                            >
+                              {catCollapsed ? (
+                                <ChevronRight className="size-3 shrink-0" aria-hidden />
+                              ) : (
+                                <ChevronDown className="size-3 shrink-0" aria-hidden />
+                              )}
+                              <span className="text-base">{cat.categoryEmoji}</span>
+                              <span>{cat.categoryName}</span>
+                              <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
+                                ({cat.items.length})
+                              </span>
+                            </button>
+                            {!catCollapsed && (
+                              <ul className="flex flex-col gap-2">
+                                <AnimatePresence initial={false}>
+                                  {cat.items.map((item) => renderItem(item))}
+                                </AnimatePresence>
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
                   )}
-                  {store.categories.map((cat) => {
-                    const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
-                    const catCollapsed = isFiltering ? false : collapsedCats.has(cKey);
-                    return (
-                      <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
-                        <button
-                          type="button"
-                          onClick={() => toggleCat(cKey)}
-                          aria-expanded={!catCollapsed}
-                          className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
-                        >
-                          {catCollapsed ? (
-                            <ChevronRight className="size-3 shrink-0" aria-hidden />
-                          ) : (
-                            <ChevronDown className="size-3 shrink-0" aria-hidden />
-                          )}
-                          <span className="text-base">{cat.categoryEmoji}</span>
-                          <span>{cat.categoryName}</span>
-                          <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
-                            ({cat.items.length})
-                          </span>
-                        </button>
-                        {!catCollapsed && (
-                          <ul className="flex flex-col gap-2">
-                            <AnimatePresence initial={false}>
-                              {cat.items.map((item) => renderItem(item))}
-                            </AnimatePresence>
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </li>
@@ -489,6 +626,26 @@ export function ListView({
         })}
       </ul>
     </div>
+  );
+}
+
+// Categoría del producto en la esquina inferior derecha del card. En modo
+// búsqueda las categorías se aplanan (sin nodos), así que cada producto muestra
+// su propia categoría acá. Posición absoluta para no crecer en alto más allá
+// del padding inferior reservado en el card.
+function CategoryTag({
+  emoji,
+  name,
+}: {
+  emoji: string | null;
+  name: string | null;
+}) {
+  if (!name) return null;
+  return (
+    <span className="pointer-events-none absolute bottom-1 right-4 flex max-w-[55%] items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+      {emoji && <span className="text-[11px] leading-none">{emoji}</span>}
+      <span className="truncate">{name}</span>
+    </span>
   );
 }
 
