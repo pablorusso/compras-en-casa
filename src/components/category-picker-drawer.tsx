@@ -3,6 +3,7 @@
 import {
   Drawer,
   DrawerContent,
+  DrawerBody,
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
@@ -46,12 +47,12 @@ export function CategoryPickerDrawer({
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent>
-        <div className="mx-auto w-full max-w-md max-h-[85svh] overflow-y-auto">
+        <div className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col">
           <DrawerHeader>
             <DrawerTitle>{title}</DrawerTitle>
             {description && <DrawerDescription>{description}</DrawerDescription>}
           </DrawerHeader>
-          <div className="px-4 pb-4 space-y-2">
+          <DrawerBody className="pb-4 space-y-2">
             <button
               type="button"
               onClick={() => onPick(null)}
@@ -71,7 +72,7 @@ export function CategoryPickerDrawer({
                 <span className="truncate">{c.name}</span>
               </button>
             ))}
-          </div>
+          </DrawerBody>
           <DrawerFooter>
             <DrawerClose asChild>
               <Button type="button" variant="ghost" size="lg">

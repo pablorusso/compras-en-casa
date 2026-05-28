@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Drawer,
   DrawerContent,
+  DrawerBody,
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
@@ -43,11 +44,13 @@ export function ProductFormDrawer({
   product,
   stores,
   categories,
+  defaultStoreId,
 }: {
   mode: "create" | "edit";
   product?: ProductRow;
   stores: StoreOption[];
   categories: CategoryOption[];
+  defaultStoreId?: number | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -60,8 +63,11 @@ export function ProductFormDrawer({
     ? (product!.defaultQuantityUnit as CanonicalUnit)
     : ("unidad" as const);
   const [unit, setUnit] = useState<CanonicalUnit>(initialUnit);
+  // En modo "create", si hay default en settings lo precargamos. En "edit"
+  // usamos el comercio que ya tiene el producto.
+  const createDefaultStoreId = mode === "create" && defaultStoreId ? String(defaultStoreId) : "";
   const [storeId, setStoreId] = useState<string>(
-    product?.storeId ? String(product.storeId) : "",
+    product?.storeId ? String(product.storeId) : createDefaultStoreId,
   );
   const [categoryId, setCategoryId] = useState<string>(
     product?.categoryId ? String(product.categoryId) : "",
@@ -78,8 +84,19 @@ export function ProductFormDrawer({
     );
   }
 
+  // En modo "create", cada vez que se abre el drawer reseteamos comercio al
+  // default y limpiamos categoría: así la última selección de una creación
+  // previa no se "pega". El drawer permanece montado entre aperturas.
+  function handleOpenChange(next: boolean) {
+    if (next && mode === "create") {
+      setStoreId(createDefaultStoreId);
+      setCategoryId("");
+    }
+    setOpen(next);
+  }
+
   return (
-    <Drawer open={open} onOpenChange={setOpen}>
+    <Drawer open={open} onOpenChange={handleOpenChange}>
       <DrawerTrigger asChild>
         {mode === "create" ? (
           <Button className="rounded-xl shrink-0">
@@ -109,7 +126,7 @@ export function ProductFormDrawer({
               }
             });
           }}
-          className="mx-auto w-full max-w-md max-h-[85svh] overflow-y-auto"
+          className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col"
         >
           <DrawerHeader>
             <DrawerTitle>{mode === "create" ? "Nuevo producto" : "Editar producto"}</DrawerTitle>
@@ -117,7 +134,7 @@ export function ProductFormDrawer({
               Para productos de temporada elegí los meses.
             </DrawerDescription>
           </DrawerHeader>
-          <div className="px-4 space-y-5 pb-4">
+          <DrawerBody className="space-y-5 pb-4">
             {mode === "edit" && <input type="hidden" name="id" value={product!.id} />}
 
             <div className="space-y-2">
@@ -281,7 +298,7 @@ export function ProductFormDrawer({
                 lista que ya lo tiene, se mantiene; y podés agregarlo a mano cuando quieras.
               </p>
             </div>
-          </div>
+          </DrawerBody>
           <DrawerFooter>
             <Button type="submit" size="lg" disabled={pending} className="rounded-xl">
               {pending ? "Guardando…" : mode === "create" ? "Crear" : "Guardar"}

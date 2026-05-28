@@ -44,10 +44,12 @@ export function ProductsManager({
   products,
   stores,
   categories,
+  defaultStoreId,
 }: {
   products: ProductRow[];
   stores: StoreOption[];
   categories: CategoryOption[];
+  defaultStoreId: number | null;
 }) {
   const [query, setQuery] = useState("");
   const [storeFilter, setStoreFilter] = useState("");
@@ -93,6 +95,7 @@ export function ProductsManager({
           mode="create"
           stores={stores}
           categories={categories}
+          defaultStoreId={defaultStoreId}
         />
       </div>
 

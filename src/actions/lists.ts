@@ -129,7 +129,7 @@ export async function addExistingProductAction(formData: FormData) {
     .limit(1);
   if (!row) throw new Error("Producto no encontrado");
 
-  await db
+  const inserted = await db
     .insert(shoppingListItems)
     .values({
       listId,
@@ -147,8 +147,10 @@ export async function addExistingProductAction(formData: FormData) {
       quantityValue: row.product.defaultQuantityValue,
       quantityUnit: row.product.defaultQuantityUnit,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: shoppingListItems.id });
   revalidateListPaths();
+  return { itemId: inserted[0]?.id ?? null };
 }
 
 export async function createAndAddProductAction(formData: FormData) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2, Upload, ArrowRight, ListX } from "lucide-react";
+import { SlidersHorizontal, KeyRound, TriangleAlert, Trash2, Upload, ArrowRight, ListX, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,10 @@ type SettingsValues = {
   historyLimit: number;
   shareLinkTtlDays: number;
   shoppingDays: number[];
+  defaultStoreId: number | null;
 };
+
+type StoreOption = { id: number; name: string; emoji: string };
 
 // Convención Date.getDay(): 0 = Domingo … 6 = Sábado. Mostrados Lun→Dom.
 const WEEK_DAYS = [
@@ -33,13 +36,22 @@ const WEEK_DAYS = [
 
 export function SettingsForms({
   settings,
+  stores,
   currentListName,
 }: {
   settings: SettingsValues;
+  stores: StoreOption[];
   currentListName: string | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [shoppingDays, setShoppingDays] = useState<number[]>(settings.shoppingDays);
+  // Select controlado: React 19 resetea inputs no controlados al `defaultValue`
+  // snapshoteado en el primer render cuando el form action completa, lo que
+  // vacía el selector tras guardar la primera vez (cuando el prop original era
+  // null). Manejarlo con estado evita ese reset y mantiene la selección.
+  const [defaultStoreId, setDefaultStoreId] = useState<string>(
+    settings.defaultStoreId != null ? String(settings.defaultStoreId) : "",
+  );
 
   const toggleDay = (value: number) =>
     setShoppingDays((prev) =>
@@ -64,7 +76,14 @@ export function SettingsForms({
             <h2 className="font-semibold">Preferencias</h2>
           </div>
           <form
-            action={(fd) => {
+            onSubmit={(e) => {
+              // Usamos onSubmit en vez de action={fn} porque React 19 hace
+              // auto-reset del form al completar una form action: con un
+              // <select> controlado eso vuelve el DOM al valor inicial y
+              // dispara un onChange que pisa el estado con el viejo valor.
+              // Con onSubmit no se aplica ese reset y el estado vive.
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
               startTransition(async () => {
                 try {
                   await updateSettingsAction(fd);
@@ -135,6 +154,29 @@ export function SettingsForms({
               <p className="text-xs text-muted-foreground">
                 Días en que hacés la compra. El nombre de cada lista nueva usará la fecha del
                 próximo día de compra (hoy incluido si coincide).
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="defaultStoreId" className="flex items-center gap-1.5">
+                <Store className="size-4 text-primary" />
+                Comercio por defecto
+              </Label>
+              <select
+                id="defaultStoreId"
+                name="defaultStoreId"
+                value={defaultStoreId}
+                onChange={(e) => setDefaultStoreId(e.target.value)}
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">— Sin comercio por defecto —</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.emoji} {s.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Se precarga al crear un producto nuevo. Si lo borrás como comercio, queda vacío.
               </p>
             </div>
             <Button type="submit" size="lg" className="rounded-xl w-full" disabled={pending}>

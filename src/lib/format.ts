@@ -43,21 +43,21 @@ export function formatQuantity(value: string | number, unit: string): string {
   return `${prettyNumber(value)} ${unit}`;
 }
 
-export type GroupedItems = {
+export type GroupedItems<T extends ShoppingListItem = ShoppingListItem> = {
   storeId: number | null;
   storeName: string;
   storeEmoji: string;
   storeAddress: string | null;
-  directItems: ShoppingListItem[];
+  directItems: T[];
   categories: {
     categoryId: number | null;
     categoryName: string;
     categoryEmoji: string;
-    items: ShoppingListItem[];
+    items: T[];
   }[];
 }[];
 
-function sortItems(items: ShoppingListItem[]): ShoppingListItem[] {
+function sortItems<T extends ShoppingListItem>(items: T[]): T[] {
   return items.sort((a, b) => a.productName.localeCompare(b.productName, "es"));
 }
 
@@ -67,10 +67,10 @@ export type ListFilterValues = {
   categoryId: number | null;
 };
 
-export function filterItems(
-  items: ShoppingListItem[],
+export function filterItems<T extends ShoppingListItem>(
+  items: T[],
   f: ListFilterValues,
-): ShoppingListItem[] {
+): T[] {
   const q = foldText(f.query.trim());
   return items.filter((item) => {
     if (f.storeId != null && item.storeId !== f.storeId) return false;
@@ -94,7 +94,7 @@ export type ListCategoryOption = {
  * (mismo criterio que groupItems). Aprovecha los campos desnormalizados del ítem,
  * así que sirve para cualquier vista de lista sin cargar las tablas maestras.
  */
-export function deriveListFilterOptions(items: ShoppingListItem[]): {
+export function deriveListFilterOptions<T extends ShoppingListItem>(items: T[]): {
   storeOptions: ListStoreOption[];
   categoryOptions: ListCategoryOption[];
 } {
@@ -193,7 +193,7 @@ export function filterItemsByStoreKeys(
   return items.filter((it) => selected.has(storeKey(it.storeId)));
 }
 
-export function groupItems(items: ShoppingListItem[]): GroupedItems {
+export function groupItems<T extends ShoppingListItem>(items: T[]): GroupedItems<T> {
   const stores = new Map<
     string,
     {
@@ -202,7 +202,7 @@ export function groupItems(items: ShoppingListItem[]): GroupedItems {
       storeEmoji: string;
       storeAddress: string | null;
       storeSortOrder: number;
-      directs: ShoppingListItem[];
+      directs: T[];
       cats: Map<
         string,
         {
@@ -210,7 +210,7 @@ export function groupItems(items: ShoppingListItem[]): GroupedItems {
           categoryName: string;
           categoryEmoji: string;
           categorySortOrder: number;
-          items: ShoppingListItem[];
+          items: T[];
         }
       >;
     }

@@ -9,14 +9,11 @@ import { LinkButton } from "@/components/ui/link-button";
 import { ListEditor } from "@/components/list-editor";
 import { NewListButton } from "@/components/new-list-button";
 import { EditableListTitle } from "@/components/editable-list-title";
-import { ShareLinkSection } from "@/components/share-link-section";
 import { CopyListButton } from "@/components/copy-list-button";
 import { PrintListButton } from "@/components/print-list-button";
 import { HeroBasket } from "@/components/illustrations";
 import { getCurrentList, getListItems, getProductsNotInList } from "@/lib/lists";
 import { derivePrintStores } from "@/lib/format";
-import { getActiveShareLink } from "@/lib/share";
-import { getRequestOrigin } from "@/lib/origin";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ListPage() {
-  const [current, origin] = await Promise.all([
-    getCurrentList(),
-    getRequestOrigin(),
-  ]);
+  const current = await getCurrentList();
   const [{ value: productCount }] = await db
     .select({ value: count() })
     .from(products)
@@ -73,9 +67,8 @@ export default async function ListPage() {
     );
   }
 
-  const [items, activeShare, notInList, storeRows, catsRows] = await Promise.all([
+  const [items, notInList, storeRows, catsRows] = await Promise.all([
     getListItems(current.id),
-    getActiveShareLink(current.id),
     getProductsNotInList(current.id),
     db.select().from(stores).orderBy(asc(stores.sortOrder), asc(stores.name)),
     db
@@ -94,19 +87,53 @@ export default async function ListPage() {
     storeName: r.store?.name ?? "—",
     storeEmoji: r.store?.emoji ?? "🛒",
   }));
-  const available = notInList.map((r) => ({
-    id: r.product.id,
-    name: r.product.name,
+  const excluded = notInList.map((r) => ({
+    productId: r.product.id,
+    productName: r.product.name,
+    categoryId: r.category?.id ?? null,
+    categoryName: r.category?.name ?? null,
+    categoryEmoji: r.category?.emoji ?? null,
+    categorySortOrder: r.category?.sortOrder ?? 0,
     storeId: r.store?.id ?? null,
-    categoryName: r.category?.name ?? "",
-    storeName: r.store?.name ?? "",
+    storeName: r.store?.name ?? null,
+    storeEmoji: r.store?.emoji ?? null,
+    storeAddress: r.store?.address ?? null,
+    storeSortOrder: r.store?.sortOrder ?? 0,
     defaultQuantityValue: r.product.defaultQuantityValue,
     defaultQuantityUnit: r.product.defaultQuantityUnit,
   }));
 
-  return (
-    <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-3xl mx-auto w-full">
-      <Card className="relative mb-7 overflow-hidden">
+  const header = (
+    <>
+      <div className="md:hidden flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">
+            Lista vigente
+          </p>
+          <div className="mt-0.5">
+            <EditableListTitle listId={current.id} initialName={current.name} size="md" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {items.length} {items.length === 1 ? "producto" : "productos"} ·{" "}
+            {current.createdAt.toLocaleDateString("es-AR", dateFmt)}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <CopyListButton list={current} items={items} />
+          <PrintListButton
+            pdfUrl={`/admin/lists/${current.id}/pdf`}
+            stores={derivePrintStores(items)}
+          />
+          <NewListButton
+            currentList={{ id: current.id, name: current.name }}
+            variant="outline"
+            size="default"
+            iconOnlyOnMobile
+          />
+        </div>
+      </div>
+
+      <Card className="hidden md:block relative overflow-hidden">
         <HeroBasket
           aria-hidden
           className="absolute -right-4 -top-4 w-44 h-36 md:w-56 md:h-44 opacity-50 pointer-events-none"
@@ -125,20 +152,6 @@ export default async function ListPage() {
             </p>
           </div>
 
-          <ShareLinkSection
-            key={current.id}
-            listId={current.id}
-            origin={origin}
-            initial={
-              activeShare
-                ? {
-                    token: activeShare.token,
-                    expiresAt: activeShare.expiresAt.toISOString(),
-                  }
-                : null
-            }
-          />
-
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
               <CopyListButton list={current} items={items} size="lg" />
@@ -156,13 +169,18 @@ export default async function ListPage() {
           </div>
         </CardContent>
       </Card>
+    </>
+  );
 
+  return (
+    <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 max-w-3xl mx-auto w-full">
       <ListEditor
         list={{ id: current.id, name: current.name }}
         items={items}
-        available={available}
+        excluded={excluded}
         stores={storeOptions}
         categories={categoryOptions}
+        header={header}
       />
     </div>
   );

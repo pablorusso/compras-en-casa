@@ -146,6 +146,11 @@ export const settings = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::smallint[]`),
+    // Comercio que se precarga al crear un producto nuevo. Nullable: si se
+    // borra el comercio referenciado, queda en NULL automáticamente.
+    defaultStoreId: integer("default_store_id").references(() => stores.id, {
+      onDelete: "set null",
+    }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("settings_singleton_chk", sql`${t.id} = 1`)],

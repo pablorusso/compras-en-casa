@@ -101,6 +101,26 @@ export async function updateProductAction(formData: FormData) {
   revalidatePath("/admin/products");
 }
 
+export async function updateProductDefaultQuantityAction(formData: FormData) {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  const value = String(formData.get("quantityValue") ?? "").trim();
+  const rawUnit = String(formData.get("quantityUnit") ?? "").trim();
+  if (!id || !value || !rawUnit) throw new Error("Datos inválidos");
+  const numeric = parseQuantityNumber(value);
+  const canon = canonicalize(numeric, rawUnit);
+  await db
+    .update(products)
+    .set({
+      defaultQuantityValue: String(canon.value),
+      defaultQuantityUnit: canon.unit,
+    })
+    .where(eq(products.id, id));
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/list");
+  revalidatePath("/admin");
+}
+
 export async function setProductExcludeFromAutoAddAction(formData: FormData) {
   await requireAdmin();
   const id = Number(formData.get("id"));
@@ -117,4 +137,7 @@ export async function deleteProductAction(formData: FormData) {
   await db.delete(products).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  // El editor de lista también muestra productos del maestro (filas excluidas);
+  // sin esto, la fila borrada queda visible hasta navegar.
+  revalidatePath("/admin/list");
 }

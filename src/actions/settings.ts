@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { settings } from "@/db/schema";
+import { settings, stores } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
 
 export async function updateSettingsAction(formData: FormData) {
@@ -22,14 +22,33 @@ export async function updateSettingsAction(formData: FormData) {
     ),
   ].sort((a, b) => a - b);
 
+  // Comercio por defecto: vacío → null. Si llega un id, validamos que exista
+  // para no guardar una FK colgada (la FK ya rechazaría con onDelete set null,
+  // pero acá nos ahorramos un round-trip con error 500).
+  const defaultStoreRaw = String(formData.get("defaultStoreId") ?? "").trim();
+  let defaultStoreId: number | null = null;
+  if (defaultStoreRaw) {
+    const parsed = Number(defaultStoreRaw);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      const [row] = await db
+        .select({ id: stores.id })
+        .from(stores)
+        .where(eq(stores.id, parsed))
+        .limit(1);
+      if (row) defaultStoreId = row.id;
+    }
+  }
+
   await db
     .update(settings)
     .set({
       historyLimit,
       shareLinkTtlDays,
       shoppingDays,
+      defaultStoreId,
       updatedAt: new Date(),
     })
     .where(eq(settings.id, 1));
   revalidatePath("/admin/settings");
+  revalidatePath("/admin/products");
 }

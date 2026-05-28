@@ -1,0 +1,2 @@
+ALTER TABLE "settings" ADD COLUMN "default_store_id" integer;--> statement-breakpoint
+ALTER TABLE "settings" ADD CONSTRAINT "settings_default_store_id_stores_id_fk" FOREIGN KEY ("default_store_id") REFERENCES "public"."stores"("id") ON DELETE set null ON UPDATE no action;

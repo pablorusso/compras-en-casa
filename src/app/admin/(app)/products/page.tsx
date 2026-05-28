@@ -1,11 +1,11 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { stores, products, categories } from "@/db/schema";
+import { stores, products, categories, settings } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { ProductsManager } from "@/components/products-manager";
 
 export default async function ProductsPage() {
-  const [rows, storeRows, catRows] = await Promise.all([
+  const [rows, storeRows, catRows, settingsRows] = await Promise.all([
     db
       .select({
         product: products,
@@ -22,7 +22,13 @@ export default async function ProductsPage() {
       .select()
       .from(categories)
       .orderBy(asc(categories.sortOrder), asc(categories.name)),
+    db
+      .select({ defaultStoreId: settings.defaultStoreId })
+      .from(settings)
+      .where(eq(settings.id, 1))
+      .limit(1),
   ]);
+  const defaultStoreId = settingsRows[0]?.defaultStoreId ?? null;
 
   const data = rows.map((r) => ({
     ...r.product,
@@ -55,6 +61,7 @@ export default async function ProductsPage() {
         products={data}
         stores={storeOptions}
         categories={categoryOptions}
+        defaultStoreId={defaultStoreId}
       />
     </div>
   );

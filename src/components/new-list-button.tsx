@@ -20,6 +20,8 @@ type Props = {
   size?: "default" | "lg";
   className?: string;
   label?: string;
+  /** Si es true, en mobile esconde label y chevron mostrando solo el ícono. */
+  iconOnlyOnMobile?: boolean;
 };
 
 export function NewListButton({
@@ -28,6 +30,7 @@ export function NewListButton({
   size = "lg",
   className,
   label = "Nueva lista",
+  iconOnlyOnMobile = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -78,10 +81,18 @@ export function NewListButton({
             variant={variant}
             size={size}
             disabled={pending}
-            className={cn("rounded-2xl gap-1.5", className)}
+            aria-label={iconOnlyOnMobile ? label : undefined}
+            className={cn(
+              "rounded-2xl gap-1.5",
+              iconOnlyOnMobile && "max-md:size-10 max-md:p-0",
+              className,
+            )}
           >
-            <Sparkles className="size-4" /> {label}
-            <ChevronDown className="size-4 opacity-80" />
+            <Sparkles className="size-4" />
+            <span className={cn(iconOnlyOnMobile && "hidden md:inline")}>{label}</span>
+            <ChevronDown
+              className={cn("size-4 opacity-80", iconOnlyOnMobile && "hidden md:inline-block")}
+            />
           </Button>
         }
       />
