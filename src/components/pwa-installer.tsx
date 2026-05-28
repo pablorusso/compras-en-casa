@@ -19,7 +19,10 @@ type BeforeInstallPromptEvent = Event & {
 function isIOSSafari(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
-  const iOS = /iPad|iPhone|iPod/.test(ua);
+  // iPadOS 13+ se reporta como "Macintosh"; lo detectamos por pantalla táctil
+  // (los Mac reales reportan maxTouchPoints === 0).
+  const iPadOS = navigator.maxTouchPoints > 1 && /Macintosh/.test(ua);
+  const iOS = /iPad|iPhone|iPod/.test(ua) || iPadOS;
   // Excluir webviews / Chrome iOS — sólo Safari real soporta "Agregar a pantalla de inicio"
   const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
   return iOS && isSafari;

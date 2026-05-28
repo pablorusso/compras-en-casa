@@ -336,6 +336,33 @@ export function ListEditor({
   useEffect(() => {
     isSearchingRef.current = isSearching;
   }, [isSearching]);
+  // En touch, colapsamos header + combos cuando el buscador toma foco (teclado
+  // abierto) para reclamar espacio vertical, aún sin texto. En desktop se
+  // conserva el comportamiento previo: colapsa solo al tipear.
+  //
+  // El colapso por foco se DIFIERE ~300ms: si reflowea el layout en simultáneo
+  // con la apertura del teclado / resize del viewport, el navegador móvil
+  // suelta el foco del input. Esperar a que el teclado termine de abrir evita
+  // ese "efecto raro". El colapso por texto (isSearching) es inmediato porque
+  // al tipear el teclado ya está abierto y el foco asentado.
+  const isTouch = useIsTouch();
+  const [searchFocused, setSearchFocused] = useState(false);
+  const focusCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchFocus = useCallback(() => {
+    if (focusCollapseTimer.current) clearTimeout(focusCollapseTimer.current);
+    focusCollapseTimer.current = setTimeout(() => setSearchFocused(true), 300);
+  }, []);
+  const handleSearchBlur = useCallback(() => {
+    if (focusCollapseTimer.current) clearTimeout(focusCollapseTimer.current);
+    setSearchFocused(false);
+  }, []);
+  useEffect(
+    () => () => {
+      if (focusCollapseTimer.current) clearTimeout(focusCollapseTimer.current);
+    },
+    [],
+  );
+  const searchActive = isSearching || (isTouch && searchFocused);
   const grouped = useMemo(() => groupItems(finalItems), [finalItems]);
   const combinedTotal = combined.length;
   const filteredCount = finalItems.length;
@@ -468,6 +495,12 @@ export function ListEditor({
   }
 
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setQuery("");
+      searchRef.current?.blur();
+      return;
+    }
     if (e.key !== "Enter" || !isSearching) return;
     e.preventDefault();
     executeSearchAction(true);
@@ -550,6 +583,7 @@ export function ListEditor({
                     registerCommit={registerCommit}
                     onRequestDelete={requestDelete}
                     isPrimary={isPrimary}
+                    showCategory={searchActive}
                   />
                 ) : (
                   <ExcludedItemRow
@@ -558,6 +592,7 @@ export function ListEditor({
                     onRequestDelete={requestProductDelete}
                     onEditQuantity={startEditExcludedQty}
                     isPrimary={isPrimary}
+                    showCategory={searchActive}
                   />
                 )}
               </motion.li>
@@ -570,9 +605,25 @@ export function ListEditor({
 
   return (
     <div className="space-y-4">
-      {header && <div className={cn(isSearching && "hidden")}>{header}</div>}
+      {(header || combinedTotal > 0) && (
+        <div className={cn("space-y-4", searchActive && "hidden")}>
+          {header}
+          {combinedTotal > 0 && (
+            <ListFilterSelects
+              storeOptions={storeOptions}
+              filterCats={filterCats}
+              storeFilter={storeFilter}
+              categoryFilter={categoryFilter}
+              onStoreChange={selectStore}
+              onCategoryChange={setCategoryFilter}
+              inclusion={inclusion}
+              onInclusionChange={setInclusion}
+            />
+          )}
+        </div>
+      )}
       {combinedTotal > 0 && (
-        <div className="sticky top-[57px] md:top-16 z-20 -mx-2 px-2 py-1.5 bg-background/90 backdrop-blur-sm rounded-xl flex items-center gap-2">
+        <div className="sticky top-[49px] md:top-14 z-20 -mx-2 px-2 py-1.5 bg-background/90 backdrop-blur-sm rounded-xl flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-primary" />
             <Input
@@ -580,6 +631,8 @@ export function ListEditor({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
               placeholder="Buscar producto…"
               className={cn("h-9 rounded-2xl pl-9", isSearching ? "pr-20" : "pr-3")}
             />
@@ -679,19 +732,6 @@ export function ListEditor({
         />
       )}
 
-      {combinedTotal > 0 && (
-        <ListFilterSelects
-          storeOptions={storeOptions}
-          filterCats={filterCats}
-          storeFilter={storeFilter}
-          categoryFilter={categoryFilter}
-          onStoreChange={selectStore}
-          onCategoryChange={setCategoryFilter}
-          inclusion={inclusion}
-          onInclusionChange={setInclusion}
-        />
-      )}
-
       {combinedTotal === 0 ? (
         <Card tone="warm" className="border-dashed py-8">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -721,7 +761,7 @@ export function ListEditor({
           </p>
         </Card>
       ) : (
-        <ul className="space-y-8">
+        <ul className="-mt-2 space-y-4">
           {grouped.map((store) => {
             const sKey = String(store.storeId ?? store.storeName);
             const storeCollapsed = isFiltering ? false : collapsedStores.has(sKey);
@@ -731,7 +771,12 @@ export function ListEditor({
               store.categories.reduce((acc, c) => acc + c.items.length, 0);
             return (
               <li key={`store-${store.storeId ?? store.storeName}`}>
-                <div className="sticky top-[109px] md:top-[120px] bg-background/90 backdrop-blur-sm py-1.5 z-10 -mx-2 px-2 rounded-xl">
+                <div
+                  className={cn(
+                    "sticky top-[101px] md:top-[112px] bg-background/90 backdrop-blur-sm z-10 -mx-2 px-2 rounded-xl",
+                    searchActive ? "py-1" : "py-1.5",
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => toggleStore(sKey)}
@@ -751,18 +796,25 @@ export function ListEditor({
                       illustration={
                         <div
                           className={cn(
-                            "flex size-8 items-center justify-center rounded-xl ring-1",
+                            "flex items-center justify-center rounded-xl ring-1",
+                            searchActive ? "size-6" : "size-8",
                             style.tint,
                             style.ring,
                           )}
                         >
-                          <span className="text-xl leading-none">{store.storeEmoji}</span>
+                          <span
+                            className={cn("leading-none", searchActive ? "text-base" : "text-xl")}
+                          >
+                            {store.storeEmoji}
+                          </span>
                         </div>
                       }
                       meta={
-                        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">
-                          {storeCount} {storeCount === 1 ? "producto" : "productos"}
-                        </span>
+                        searchActive ? undefined : (
+                          <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">
+                            {storeCount} {storeCount === 1 ? "producto" : "productos"}
+                          </span>
+                        )
                       }
                       className="flex-1"
                     />
@@ -775,34 +827,49 @@ export function ListEditor({
                   </p>
                 )}
                 {!storeCollapsed && (
-                  <div className="space-y-5 mt-3 pl-1">
-                    {store.directItems.length > 0 && renderRows(store.directItems)}
-                    {store.categories.map((cat) => {
-                      const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
-                      const catCollapsed = isFiltering ? false : collapsedCats.has(cKey);
-                      return (
-                        <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
-                          <button
-                            type="button"
-                            onClick={() => toggleCat(cKey)}
-                            aria-expanded={!catCollapsed}
-                            className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
-                          >
-                            {catCollapsed ? (
-                              <ChevronRight className="size-3 shrink-0" aria-hidden />
-                            ) : (
-                              <ChevronDown className="size-3 shrink-0" aria-hidden />
-                            )}
-                            <span className="text-base">{cat.categoryEmoji}</span>
-                            <span>{cat.categoryName}</span>
-                            <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
-                              ({cat.items.length})
-                            </span>
-                          </button>
-                          {!catCollapsed && renderRows(cat.items)}
-                        </div>
-                      );
-                    })}
+                  <div className={cn("mt-3 pl-1", !searchActive && "space-y-5")}>
+                    {searchActive ? (
+                      // Modo búsqueda: aplanamos las categorías; cada producto
+                      // muestra su categoría en el card (CategoryTag) y se gana
+                      // alto vertical para ver más resultados con el teclado.
+                      renderRows([
+                        ...store.directItems,
+                        ...store.categories.flatMap((c) => c.items),
+                      ])
+                    ) : (
+                      // Vista normal: categorías como nodos colapsables.
+                      <>
+                        {store.directItems.length > 0 && renderRows(store.directItems)}
+                        {store.categories.map((cat) => {
+                          const cKey = `${sKey}::${cat.categoryId ?? cat.categoryName}`;
+                          const catCollapsed = isFiltering
+                            ? false
+                            : collapsedCats.has(cKey);
+                          return (
+                            <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleCat(cKey)}
+                                aria-expanded={!catCollapsed}
+                                className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
+                              >
+                                {catCollapsed ? (
+                                  <ChevronRight className="size-3 shrink-0" aria-hidden />
+                                ) : (
+                                  <ChevronDown className="size-3 shrink-0" aria-hidden />
+                                )}
+                                <span className="text-base">{cat.categoryEmoji}</span>
+                                <span>{cat.categoryName}</span>
+                                <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
+                                  ({cat.items.length})
+                                </span>
+                              </button>
+                              {!catCollapsed && renderRows(cat.items)}
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                 )}
               </li>
@@ -815,18 +882,40 @@ export function ListEditor({
   );
 }
 
+// Categoría del producto en la esquina inferior derecha del card. En modo
+// búsqueda las categorías se aplanan (sin nodos), así que cada producto muestra
+// su propia categoría acá. Posición absoluta para no crecer en alto más allá
+// del padding inferior reservado en el card.
+function CategoryTag({
+  emoji,
+  name,
+}: {
+  emoji: string | null;
+  name: string | null;
+}) {
+  if (!name) return null;
+  return (
+    <span className="pointer-events-none absolute bottom-1 right-4 flex max-w-[55%] items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+      {emoji && <span className="text-[11px] leading-none">{emoji}</span>}
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
+
 const ExcludedItemRow = memo(function ExcludedItemRow({
   item,
   onAdd,
   onRequestDelete,
   onEditQuantity,
   isPrimary,
+  showCategory,
 }: {
   item: EditorItem;
   onAdd: (productId: number) => Promise<number | null>;
   onRequestDelete: (productId: number, productName: string) => void;
   onEditQuantity: (item: EditorItem) => void;
   isPrimary?: boolean;
+  showCategory?: boolean;
 }) {
   const isTouch = useIsTouch();
   const [pending, startTransition] = useTransition();
@@ -876,7 +965,8 @@ const ExcludedItemRow = memo(function ExcludedItemRow({
     >
       <Card
         className={cn(
-          "relative flex flex-row items-center gap-3 px-3 py-2 bg-muted border-dashed",
+          "relative flex flex-row items-center gap-3 px-3 bg-muted border-dashed",
+          showCategory ? "pt-2 pb-5" : "py-2",
           pending && "opacity-60",
           isPrimary && "border-2 border-primary",
         )}
@@ -935,6 +1025,9 @@ const ExcludedItemRow = memo(function ExcludedItemRow({
             </Button>
           </div>
         )}
+        {showCategory && (
+          <CategoryTag emoji={item.categoryEmoji} name={item.categoryName} />
+        )}
       </Card>
     </SwipeableRow>
   );
@@ -989,6 +1082,7 @@ const ListItemRow = memo(function ListItemRow({
   registerCommit,
   onRequestDelete,
   isPrimary,
+  showCategory,
 }: {
   item: ShoppingListItem;
   activeEditor: ActiveEditor;
@@ -997,6 +1091,7 @@ const ListItemRow = memo(function ListItemRow({
   registerCommit: (key: string, fn: () => void) => () => void;
   onRequestDelete: (item: ShoppingListItem) => void;
   isPrimary?: boolean;
+  showCategory?: boolean;
 }) {
   const isTouch = useIsTouch();
   const isEditingQty = activeEditor?.id === item.id && activeEditor.kind === "qty";
@@ -1186,7 +1281,11 @@ const ListItemRow = memo(function ListItemRow({
     >
     <Card
       className={cn(
-        "relative flex flex-col gap-1 px-3 py-2",
+        "relative flex flex-col gap-1 px-3 pt-2",
+        // Reserva espacio para el tag de categoría (esquina inf. der.) solo en
+        // modo búsqueda, y nunca mientras se edita cantidad/nota (la UI
+        // expandida ocupa el fondo del card).
+        showCategory && !isEditingQty && !isEditingNotes ? "pb-5" : "pb-2",
         pending && "opacity-70",
         isPrimary && "border-2 border-dashed border-primary",
       )}
@@ -1387,6 +1486,9 @@ const ListItemRow = memo(function ListItemRow({
             <X className="size-4" />
           </Button>
         </div>
+      )}
+      {showCategory && !isEditingQty && !isEditingNotes && (
+        <CategoryTag emoji={item.categoryEmoji} name={item.categoryName} />
       )}
     </Card>
     </SwipeableRow>

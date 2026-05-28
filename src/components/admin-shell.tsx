@@ -133,8 +133,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1 flex-col min-w-0">
         <header
-          className="sticky top-0 z-30 flex items-center gap-2 border-b border-border/60 bg-background/85 px-4 pb-3 backdrop-blur-md md:px-6"
-          style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+          className="sticky top-0 z-30 flex items-center gap-2 border-b border-border/60 bg-background/85 px-4 pb-2 backdrop-blur-md md:px-6"
+          style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top))" }}
         >
           <Link
             href="/admin"
