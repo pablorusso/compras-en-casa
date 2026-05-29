@@ -37,6 +37,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { SwipeableRow, type SwipeAction } from "@/components/swipeable-row";
 import { EmptyList } from "@/components/illustrations";
 import { useIsTouch } from "@/lib/use-is-touch";
+import { playSound } from "@/lib/play-sound";
 import { AddProductDrawer } from "@/components/add-product-drawer";
 import {
   QuantityEditDrawer,
@@ -180,6 +181,7 @@ export function ListEditor({
 
   const requestDelete = useCallback(
     (item: ShoppingListItem) => {
+      playSound("/sounds/ehnop.mp4");
       setHiddenIds((prev) => new Set(prev).add(item.id));
       const timer = setTimeout(() => commitDelete(item.id), 5000);
       deleteTimers.current.set(item.id, timer);
