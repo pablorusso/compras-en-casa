@@ -37,7 +37,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { SwipeableRow, type SwipeAction } from "@/components/swipeable-row";
 import { EmptyList } from "@/components/illustrations";
 import { useIsTouch } from "@/lib/use-is-touch";
-import { playSound } from "@/lib/play-sound";
+import { playSound, preloadSound } from "@/lib/play-sound";
 import { AddProductDrawer } from "@/components/add-product-drawer";
 import {
   QuantityEditDrawer,
@@ -197,6 +197,11 @@ export function ListEditor({
     },
     [commitDelete, undoDelete, focusAndSelectSearch],
   );
+
+  // Precarga el sonido de borrado para que el primer uso no tenga lag.
+  useEffect(() => {
+    preloadSound("/sounds/ehnop.mp4");
+  }, []);
 
   // Al desmontar, confirmar de inmediato los borrados pendientes.
   useEffect(() => {
