@@ -12,6 +12,7 @@ import { EyeOff } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
+  DrawerBody,
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
@@ -80,7 +81,7 @@ export function CategoryFormDrawer({
               }
             });
           }}
-          className="mx-auto w-full max-w-md"
+          className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col"
         >
           <DrawerHeader>
             <DrawerTitle>
@@ -88,7 +89,7 @@ export function CategoryFormDrawer({
             </DrawerTitle>
             <DrawerDescription>Carne, pollo, limpieza, frutas, lácteos…</DrawerDescription>
           </DrawerHeader>
-          <div className="px-4 space-y-4">
+          <DrawerBody className="space-y-4">
             {mode === "edit" && <input type="hidden" name="id" value={category!.id} />}
             {mode === "create" && (
               <input type="hidden" name="storeId" value={storeId} />
@@ -136,7 +137,7 @@ export function CategoryFormDrawer({
                 maestro y se pueden agregar a mano.
               </p>
             </div>
-          </div>
+          </DrawerBody>
           <DrawerFooter>
             <Button type="submit" size="lg" disabled={pending} className="rounded-xl">
               {pending ? "Guardando…" : mode === "create" ? "Crear" : "Guardar"}

@@ -4,11 +4,17 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
+import { useKeyboardInset } from "@/lib/use-keyboard-inset"
 
 function Drawer({
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  return <DrawerPrimitive.Root data-slot="drawer" {...props} />
+  // `repositionInputs={false}` apaga la lógica de teclado de vaul (inestable en
+  // iOS/iPad). El reposicionamiento sobre el teclado lo maneja `DrawerContent`
+  // con `useKeyboardInset`. Va antes de `{...props}` para permitir override.
+  return (
+    <DrawerPrimitive.Root data-slot="drawer" repositionInputs={false} {...props} />
+  )
 }
 
 function DrawerTrigger({
@@ -48,17 +54,43 @@ function DrawerOverlay({
 function DrawerContent({
   className,
   children,
+  style,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Content>) {
+  const contentRef = React.useRef<HTMLDivElement>(null)
+  const inset = useKeyboardInset()
+
+  // Con el teclado abierto limitamos el drawer al área visible y lo apoyamos
+  // sobre el teclado (`bottom`). Anula el `max-h-[85dvh]`/`bottom-0` de Tailwind
+  // por especificidad inline. Asume dirección `bottom` (la única usada en la app).
+  const keyboardStyle: React.CSSProperties | undefined = inset.isOpen
+    ? { maxHeight: `${inset.visibleHeight}px`, bottom: `${inset.bottom}px` }
+    : undefined
+
+  // vaul ya no hace scrollIntoView (lo apagamos con `repositionInputs={false}`),
+  // así que traemos el campo enfocado a la vista una vez que el layout se ajustó.
+  React.useEffect(() => {
+    if (!inset.isOpen) return
+    const content = contentRef.current
+    const active = document.activeElement
+    if (!content || !active || !content.contains(active)) return
+    const id = requestAnimationFrame(() => {
+      active.scrollIntoView({ block: "center", behavior: "smooth" })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [inset.isOpen, inset.bottom])
+
   return (
     <DrawerPortal data-slot="drawer-portal">
       <DrawerOverlay />
       <DrawerPrimitive.Content
+        ref={contentRef}
         data-slot="drawer-content"
         className={cn(
           "group/drawer-content fixed z-50 flex h-auto flex-col overflow-hidden bg-popover text-sm text-popover-foreground data-[vaul-drawer-direction=bottom]:inset-x-0 data-[vaul-drawer-direction=bottom]:bottom-0 data-[vaul-drawer-direction=bottom]:mt-24 data-[vaul-drawer-direction=bottom]:max-h-[85dvh] data-[vaul-drawer-direction=bottom]:rounded-t-3xl data-[vaul-drawer-direction=bottom]:border-t data-[vaul-drawer-direction=left]:inset-y-0 data-[vaul-drawer-direction=left]:left-0 data-[vaul-drawer-direction=left]:w-3/4 data-[vaul-drawer-direction=left]:rounded-r-3xl data-[vaul-drawer-direction=left]:border-r data-[vaul-drawer-direction=right]:inset-y-0 data-[vaul-drawer-direction=right]:right-0 data-[vaul-drawer-direction=right]:w-3/4 data-[vaul-drawer-direction=right]:rounded-l-3xl data-[vaul-drawer-direction=right]:border-l data-[vaul-drawer-direction=top]:inset-x-0 data-[vaul-drawer-direction=top]:top-0 data-[vaul-drawer-direction=top]:mb-24 data-[vaul-drawer-direction=top]:max-h-[85dvh] data-[vaul-drawer-direction=top]:rounded-b-3xl data-[vaul-drawer-direction=top]:border-b data-[vaul-drawer-direction=left]:sm:max-w-sm data-[vaul-drawer-direction=right]:sm:max-w-sm",
           className
         )}
+        style={{ ...style, ...keyboardStyle }}
         {...props}
       >
         <div className="mx-auto mt-3 hidden h-1.5 w-12 shrink-0 rounded-full bg-foreground/15 group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
@@ -104,7 +136,12 @@ function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="drawer-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      className={cn(
+        // Respeta la safe-area inferior (notch/home indicator). Con el teclado
+        // abierto la safe-area colapsa a ~0, por eso el `max()` evita JS extra.
+        "mt-auto flex flex-col gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
+        className
+      )}
       {...props}
     />
   )

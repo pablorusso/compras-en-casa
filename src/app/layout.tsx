@@ -37,6 +37,11 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // En Chromium achica el viewport del layout al abrir el teclado, así los
+  // drawers (anclados a `bottom-0` y medidos en `dvh`) quedan por encima del
+  // teclado sin JS. iOS/iPad Safari lo ignora; ahí el ajuste lo hace el hook
+  // `useKeyboardInset` en `ui/drawer.tsx`.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

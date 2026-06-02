@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Drawer,
   DrawerContent,
+  DrawerBody,
   DrawerHeader,
   DrawerTitle,
   DrawerDescription,
@@ -295,7 +296,7 @@ function StoreFormDrawer({
               }
             });
           }}
-          className="mx-auto w-full max-w-md"
+          className="mx-auto w-full max-w-md flex-1 min-h-0 flex flex-col"
         >
           <DrawerHeader>
             <DrawerTitle>{mode === "create" ? "Nuevo comercio" : "Editar comercio"}</DrawerTitle>
@@ -303,7 +304,7 @@ function StoreFormDrawer({
               Lugar donde se compra. El emoji se autogenera si lo dejás vacío.
             </DrawerDescription>
           </DrawerHeader>
-          <div className="px-4 space-y-4">
+          <DrawerBody className="space-y-4">
             {mode === "edit" && <input type="hidden" name="id" value={store!.id} />}
             <div className="space-y-2">
               <Label htmlFor="store-name">Nombre</Label>
@@ -366,7 +367,7 @@ function StoreFormDrawer({
                 siguen en el maestro y se pueden agregar a mano.
               </p>
             </div>
-          </div>
+          </DrawerBody>
           <DrawerFooter>
             <Button type="submit" size="lg" disabled={pending} className="rounded-xl">
               {pending ? "Guardando…" : mode === "create" ? "Crear" : "Guardar"}
