@@ -7,22 +7,7 @@ import { products, categories } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
 import { canonicalize } from "@/lib/units";
 import { resolveAutoCategoryId } from "@/lib/classify";
-
-function parseSeasonMonths(formData: FormData): number[] {
-  const raw = formData.getAll("seasonMonths");
-  const months: number[] = [];
-  for (const r of raw) {
-    const n = Number(r);
-    if (Number.isInteger(n) && n >= 1 && n <= 12) months.push(n);
-  }
-  return Array.from(new Set(months)).sort((a, b) => a - b);
-}
-
-function parseQuantityNumber(raw: string): number {
-  const n = Number(String(raw).replace(",", "."));
-  if (!Number.isFinite(n) || n <= 0) throw new Error("Cantidad inválida");
-  return n;
-}
+import { parseProductFlags, parseQuantityNumber } from "@/lib/product-form";
 
 type CreateInput = {
   name: string;
@@ -46,16 +31,9 @@ async function fromForm(formData: FormData): Promise<CreateInput> {
   const canon = canonicalize(qtyNumber, rawUnit);
   const defaultQuantityValue = String(canon.value);
   const defaultQuantityUnit = canon.unit;
-  const isSeasonal = formData.get("isSeasonal") === "on" || formData.get("isSeasonal") === "true";
-  const seasonMonths = isSeasonal ? parseSeasonMonths(formData) : [];
-  const excludeFromAutoAdd =
-    formData.get("excludeFromAutoAdd") === "on" ||
-    formData.get("excludeFromAutoAdd") === "true";
+  const { isSeasonal, seasonMonths, excludeFromAutoAdd } = parseProductFlags(formData);
   if (!name) throw new Error("Nombre requerido");
   if (!storeId) throw new Error("Comercio requerido");
-  if (isSeasonal && seasonMonths.length === 0) {
-    throw new Error("Si es de temporada, seleccioná al menos un mes");
-  }
   if (categoryId) {
     const [cat] = await db
       .select({ id: categories.id, storeId: categories.storeId })

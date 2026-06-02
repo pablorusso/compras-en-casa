@@ -20,6 +20,7 @@ import {
 import { createShareLink } from "@/lib/share";
 import { canonicalize } from "@/lib/units";
 import { resolveAutoCategoryId } from "@/lib/classify";
+import { parseProductFlags } from "@/lib/product-form";
 
 function revalidateListPaths() {
   revalidatePath("/admin");
@@ -170,6 +171,10 @@ export async function createAndAddProductAction(formData: FormData) {
   const canon = canonicalize(qtyRaw, rawUnit);
   const qty = canon.value;
   const unit = canon.unit;
+  // Mismos flags que el maestro: temporada (+meses) y "no auto-agregar a listas
+  // nuevas". Marcarlos no afecta esta alta (el producto se inserta igual abajo);
+  // solo cambia cómo se comporta el producto en listas futuras.
+  const { isSeasonal, seasonMonths, excludeFromAutoAdd } = parseProductFlags(formData);
 
   const [store] = await db
     .select()
@@ -203,8 +208,9 @@ export async function createAndAddProductAction(formData: FormData) {
       categoryId,
       defaultQuantityValue: String(qty),
       defaultQuantityUnit: unit,
-      isSeasonal: false,
-      seasonMonths: [],
+      isSeasonal,
+      seasonMonths,
+      excludeFromAutoAdd,
     })
     .returning();
 
