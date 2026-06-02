@@ -200,10 +200,8 @@ export function ProductFormDrawer({
                 <Input
                   id="p-qty"
                   name="defaultQuantityValue"
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  min="0"
-                  step="0.001"
                   defaultValue={product?.defaultQuantityValue ?? "1"}
                   required
                   className="h-11"

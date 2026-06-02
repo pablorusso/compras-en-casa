@@ -224,10 +224,8 @@ function CreateNewForm({
           <Input
             id="new-qty"
             name="defaultQuantityValue"
-            type="number"
+            type="text"
             inputMode="decimal"
-            min="0"
-            step="0.001"
             defaultValue="1"
             required
             className="h-11"

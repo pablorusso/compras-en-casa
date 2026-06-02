@@ -30,11 +30,31 @@ export function prettyNumber(value: string | number): string {
 }
 
 /**
+ * Acepta coma o punto como separador decimal y devuelve el string con punto, que es lo que
+ * entiende Number(). Las cantidades de la app son chicas y sin separador de miles, así que el
+ * reemplazo simple alcanza (mismo criterio que las server actions de lists.ts y products.ts).
+ */
+export function normalizeDecimal(value: string): string {
+  return value.replace(",", ".");
+}
+
+/**
+ * Filtra la cantidad mientras se tipea: solo dígitos y un único separador decimal (coma o punto).
+ * Reemplaza la validación nativa que se pierde al usar inputs de texto en vez de type="number".
+ */
+export function sanitizeQuantityInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d.,]/g, "");
+  const i = cleaned.search(/[.,]/);
+  if (i === -1) return cleaned;
+  return cleaned.slice(0, i + 1) + cleaned.slice(i + 1).replace(/[.,]/g, "");
+}
+
+/**
  * Normaliza una cantidad para edición: máximo 2 decimales y sin ceros finales.
- * Ej.: "1.000" → "1", "0.50" → "0.5", "0.125" → "0.13".
+ * Ej.: "1.000" → "1", "0.50" → "0.5", "0.125" → "0.13", "1,5" → "1.5".
  */
 export function toEditQuantity(value: string | number): string {
-  const num = Number(value);
+  const num = typeof value === "number" ? value : Number(normalizeDecimal(value));
   if (!Number.isFinite(num)) return String(value);
   return prettyNumber(num.toFixed(2));
 }

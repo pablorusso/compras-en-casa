@@ -15,7 +15,7 @@ import {
   DrawerDescription,
   DrawerFooter,
 } from "@/components/ui/drawer";
-import { toEditQuantity } from "@/lib/format";
+import { sanitizeQuantityInput, toEditQuantity } from "@/lib/format";
 import {
   isCanonicalUnit,
   UNIT_PICKER_GRID,
@@ -155,10 +155,9 @@ function QuantityForm({
           <Input
             ref={inputRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
-            type="number"
+            onChange={(e) => setValue(sanitizeQuantityInput(e.target.value))}
+            type="text"
             inputMode="decimal"
-            step="0.01"
             className="h-11 text-base"
             aria-label="Cantidad"
           />

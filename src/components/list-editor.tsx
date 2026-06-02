@@ -45,7 +45,13 @@ import {
 } from "@/components/quantity-edit-drawer";
 import { DeleteProductConfirmDialog } from "@/components/delete-product-dialog";
 import { getStoreStyle } from "@/lib/store-style";
-import { filterItems, groupItems, toEditQuantity } from "@/lib/format";
+import {
+  filterItems,
+  groupItems,
+  normalizeDecimal,
+  sanitizeQuantityInput,
+  toEditQuantity,
+} from "@/lib/format";
 import {
   ListFilterSelects,
   type InclusionFilter,
@@ -1135,7 +1141,7 @@ const ListItemRow = memo(function ListItemRow({
   }, [notesDraft]);
 
   function step(delta: number) {
-    const base = Number(value) || 0;
+    const base = Number(normalizeDecimal(value)) || 0;
     const next = stepQuantity(base, unit, delta > 0 ? 1 : -1, item.productName);
     setValue(String(next));
     const fd = new FormData();
@@ -1331,10 +1337,9 @@ const ListItemRow = memo(function ListItemRow({
                 <Input
                   ref={qtyInputRef}
                   value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  type="number"
+                  onChange={(e) => setValue(sanitizeQuantityInput(e.target.value))}
+                  type="text"
                   inputMode="decimal"
-                  step="0.01"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
