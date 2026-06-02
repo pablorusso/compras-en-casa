@@ -77,7 +77,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
-      <aside className="hidden md:flex md:w-64 md:flex-col border-r border-border/60 bg-card/40 backdrop-blur-sm">
+      <aside className="hidden md:flex md:w-64 md:flex-col md:sticky md:top-0 md:h-svh md:overflow-y-auto border-r border-border/60 bg-card/40 backdrop-blur-sm">
         <div className="px-6 py-6 flex items-center gap-2.5">
           <LogoMark className="size-9 shrink-0" />
           <span className="font-display text-lg font-semibold tracking-tight">
