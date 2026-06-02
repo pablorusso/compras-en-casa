@@ -951,22 +951,27 @@ const ExcludedItemRow = memo(function ExcludedItemRow({
     onRequestDelete(item.productId, item.productName);
   }
 
+  // Swipe a la izquierda: pide borrado del maestro, siempre detrás de una
+  // confirmación. `dismissOnTrigger: false` para que la fila vuelva a su lugar
+  // (no quede volada) mientras el diálogo está abierto y al cancelar.
   const swipeAction: SwipeAction = {
-    label: "Agregar",
-    icon: <Plus className="size-5 shrink-0" />,
-    className: "bg-primary text-primary-foreground",
-    onTrigger: add,
+    label: "Borrar",
+    icon: <Trash2 className="size-5 shrink-0" />,
+    className: "bg-destructive text-destructive-foreground",
+    onTrigger: requestDeleteProduct,
+    dismissOnTrigger: false,
   };
 
-  // Swipe a la derecha (opuesto a "agregar"): pide borrado del maestro,
-  // siempre detrás de una confirmación.
+  // Swipe a la derecha (opuesto a "borrar"): agrega a la lista y vuela la fila
+  // fuera de pantalla. Requiere producto del maestro.
   const rightSwipeAction: SwipeAction | undefined =
     item.productId != null
       ? {
-          label: "Borrar",
-          icon: <Trash2 className="size-5 shrink-0" />,
-          className: "bg-destructive text-destructive-foreground",
-          onTrigger: requestDeleteProduct,
+          label: "Agregar",
+          icon: <Plus className="size-5 shrink-0" />,
+          className: "bg-primary text-primary-foreground",
+          onTrigger: add,
+          dismissOnTrigger: true,
         }
       : undefined;
 
@@ -986,17 +991,17 @@ const ExcludedItemRow = memo(function ExcludedItemRow({
       >
         {isTouch && (
           <>
-            {/* Pista de swipe: rojo a la izq (arrastrar → borrar del maestro),
-                verde a la der (arrastrar → agregar a la lista). */}
+            {/* Pista de swipe: verde a la izq (arrastrar a la der → agregar a la
+                lista), rojo a la der (arrastrar a la izq → borrar del maestro). */}
             {rightSwipeAction && (
               <span
                 aria-hidden
-                className="pointer-events-none absolute left-0.5 top-2 bottom-2 w-1 rounded-full bg-destructive/40"
+                className="pointer-events-none absolute left-0.5 top-2 bottom-2 w-1 rounded-full bg-primary/50"
               />
             )}
             <span
               aria-hidden
-              className="pointer-events-none absolute right-0.5 top-2 bottom-2 w-1 rounded-full bg-primary/50"
+              className="pointer-events-none absolute right-0.5 top-2 bottom-2 w-1 rounded-full bg-destructive/40"
             />
           </>
         )}

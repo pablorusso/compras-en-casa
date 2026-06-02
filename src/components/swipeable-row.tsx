@@ -18,6 +18,12 @@ export type SwipeAction = {
   // Clases de fondo + texto del panel revelado (ej. "bg-destructive text-destructive-foreground").
   className: string;
   onTrigger: () => void;
+  // Al disparar: `true` (default del swipe izquierdo) vuela la fila fuera de
+  // pantalla en la dirección del gesto; `false` (default del swipe derecho) la
+  // devuelve a su lugar y dispara, para acciones detrás de un diálogo cuyo
+  // "cancelar" debe restaurar la posición. El comportamiento sigue a la acción,
+  // no al lado, así puede invertirse la dirección sin romper la animación.
+  dismissOnTrigger?: boolean;
 };
 
 /**
@@ -28,8 +34,11 @@ export type SwipeAction = {
  *   izquierda (lado del número), persistentes y tocables.
  * - Como alternativa a `quantityActions`, `rightAction` reusa el lado derecho
  *   como un segundo gatillo simétrico al izquierdo (no persistente). Útil para
- *   filas excluidas: izquierda = agregar, derecha = borrar del maestro.
+ *   filas excluidas: izquierda = borrar del maestro, derecha = agregar.
  *   `rightAction` y `quantityActions` son mutuamente excluyentes.
+ * La animación al disparar (volar fuera vs volver a su lugar) la define cada
+ * acción con `dismissOnTrigger`, no el lado; así la dirección puede invertirse
+ * sin que "borrar" detrás de un diálogo quede volada fuera de pantalla.
  * Con `enabled` en `false` renderiza el contenido tal cual (camino escritorio).
  */
 export function SwipeableRow({
@@ -70,14 +79,26 @@ export function SwipeableRow({
     const threshold = Math.min(SWIPE_THRESHOLD, width * 0.4);
 
     if (offset < -threshold) {
-      animate(x, -width, { type: "tween", duration: 0.2, onComplete: action.onTrigger });
+      // Swipe izquierdo: por defecto vuela la fila fuera de pantalla. Si la
+      // acción pide no descartar (ej. abre un diálogo), volvemos a 0 y disparamos.
+      if (action.dismissOnTrigger === false) {
+        animate(x, 0, SPRING);
+        action.onTrigger();
+      } else {
+        animate(x, -width, { type: "tween", duration: 0.2, onComplete: action.onTrigger });
+      }
       return;
     }
     if (hasRightAction && offset > threshold) {
-      // Para no dejar la fila "volada" si el handler abre un dialog (cancelar
-      // debería restaurar la posición), volvemos a 0 y disparamos el trigger.
-      animate(x, 0, SPRING);
-      rightAction!.onTrigger();
+      // Swipe derecho: por defecto vuelve a su lugar y dispara (para que
+      // "cancelar" en un diálogo restaure la posición). Si la acción pide
+      // descartar, vuela la fila fuera de pantalla hacia la derecha.
+      if (rightAction!.dismissOnTrigger === true) {
+        animate(x, width, { type: "tween", duration: 0.2, onComplete: rightAction!.onTrigger });
+      } else {
+        animate(x, 0, SPRING);
+        rightAction!.onTrigger();
+      }
       return;
     }
     if (hasQuantityActions && offset > OPEN_THRESHOLD) {
