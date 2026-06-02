@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import {
   addExistingProductAction,
   removeItemAction,
+  updateItemNameAction,
   updateItemNotesAction,
   updateItemQuantityAction,
 } from "@/actions/lists";
@@ -65,7 +66,7 @@ import type {
 } from "@/components/product-form-drawer";
 import { cn } from "@/lib/utils";
 
-type EditorKind = "qty" | "notes";
+type EditorKind = "qty" | "notes" | "name";
 type ActiveEditor = { id: number; kind: EditorKind } | null;
 
 // Producto del maestro que NO está en la lista. Trae los campos desnormalizados
@@ -1114,6 +1115,7 @@ const ListItemRow = memo(function ListItemRow({
   const isTouch = useIsTouch();
   const isEditingQty = activeEditor?.id === item.id && activeEditor.kind === "qty";
   const isEditingNotes = activeEditor?.id === item.id && activeEditor.kind === "notes";
+  const isEditingName = activeEditor?.id === item.id && activeEditor.kind === "name";
 
   const initialUnit: CanonicalUnit = isCanonicalUnit(item.quantityUnit)
     ? (item.quantityUnit as CanonicalUnit)
@@ -1123,11 +1125,13 @@ const ListItemRow = memo(function ListItemRow({
   const [value, setValue] = useState(toEditQuantity(item.quantityValue));
   const [unit, setUnit] = useState<CanonicalUnit>(initialUnit);
   const [notesDraft, setNotesDraft] = useState(initialNotes);
+  const [nameDraft, setNameDraft] = useState(item.productName);
   const [pending, startTransition] = useTransition();
 
   const valueRef = useRef(value);
   const unitRef = useRef(unit);
   const notesDraftRef = useRef(notesDraft);
+  const nameDraftRef = useRef(nameDraft);
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (isEditingQty) {
@@ -1144,6 +1148,9 @@ const ListItemRow = memo(function ListItemRow({
   useEffect(() => {
     notesDraftRef.current = notesDraft;
   }, [notesDraft]);
+  useEffect(() => {
+    nameDraftRef.current = nameDraft;
+  }, [nameDraft]);
 
   function step(delta: number) {
     const base = Number(normalizeDecimal(value)) || 0;
@@ -1201,6 +1208,22 @@ const ListItemRow = memo(function ListItemRow({
     saveNotes("");
   }
 
+  function saveName(raw: string) {
+    const name = raw.trim();
+    if (!name) return;
+    const fd = new FormData();
+    fd.set("id", String(item.id));
+    fd.set("name", name);
+    startTransition(async () => {
+      try {
+        await updateItemNameAction(fd);
+        clearEditor();
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
+    });
+  }
+
   function cancelQtyEdit() {
     setValue(toEditQuantity(item.quantityValue));
     setUnit(initialUnit);
@@ -1209,6 +1232,11 @@ const ListItemRow = memo(function ListItemRow({
 
   function cancelNotesEdit() {
     setNotesDraft(initialNotes);
+    clearEditor();
+  }
+
+  function cancelNameEdit() {
+    setNameDraft(item.productName);
     clearEditor();
   }
 
@@ -1221,6 +1249,11 @@ const ListItemRow = memo(function ListItemRow({
   function startNotesEdit(initial: string) {
     setNotesDraft(initial);
     requestEdit(item.id, "notes");
+  }
+
+  function startNameEdit() {
+    setNameDraft(item.productName);
+    requestEdit(item.id, "name");
   }
 
   // Register a "commit current draft" so the parent can flush this row
@@ -1263,6 +1296,24 @@ const ListItemRow = memo(function ListItemRow({
     });
   }, [item.id, initialNotes, registerCommit]);
 
+  useEffect(() => {
+    const key = `${item.id}:name`;
+    return registerCommit(key, () => {
+      const name = nameDraftRef.current.trim();
+      if (!name || name === item.productName) return;
+      const fd = new FormData();
+      fd.set("id", String(item.id));
+      fd.set("name", name);
+      startTransition(async () => {
+        try {
+          await updateItemNameAction(fd);
+        } catch (err) {
+          toast.error((err as Error).message);
+        }
+      });
+    });
+  }, [item.id, item.productName, registerCommit]);
+
   const quantityActions = (
     <>
       <button
@@ -1288,7 +1339,7 @@ const ListItemRow = memo(function ListItemRow({
 
   return (
     <SwipeableRow
-      enabled={isTouch && !isEditingQty && !isEditingNotes}
+      enabled={isTouch && !isEditingQty && !isEditingNotes && !isEditingName}
       action={{
         label: "Borrar",
         icon: <Trash2 className="size-5 shrink-0" />,
@@ -1303,12 +1354,14 @@ const ListItemRow = memo(function ListItemRow({
         // Reserva espacio para el tag de categoría (esquina inf. der.) solo en
         // modo búsqueda, y nunca mientras se edita cantidad/nota (la UI
         // expandida ocupa el fondo del card).
-        showCategory && !isEditingQty && !isEditingNotes ? "pb-5" : "pb-2",
+        showCategory && !isEditingQty && !isEditingNotes && !isEditingName
+          ? "pb-5"
+          : "pb-2",
         pending && "opacity-70",
         isPrimary && "border-2 border-dashed border-primary",
       )}
     >
-      {isTouch && !isEditingQty && !isEditingNotes && (
+      {isTouch && !isEditingQty && !isEditingNotes && !isEditingName && (
         <>
           {/* Pista de swipe: verde a la izq (arrastrar → cantidad), rojo a la der (arrastrar → borrar). */}
           <span
@@ -1335,7 +1388,54 @@ const ListItemRow = memo(function ListItemRow({
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <div className="font-medium break-words">{item.productName}</div>
+          {isEditingName ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                autoFocus
+                maxLength={120}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveName(nameDraft);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelNameEdit();
+                  }
+                }}
+                className="h-8 text-sm"
+              />
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={() => saveName(nameDraft)}
+                disabled={pending || !nameDraft.trim()}
+              >
+                OK
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-8"
+                onClick={cancelNameEdit}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          ) : isEditingQty ? (
+            <div className="font-medium break-words">{item.productName}</div>
+          ) : (
+            <button
+              type="button"
+              onClick={startNameEdit}
+              className="block w-full text-left font-medium break-words rounded-lg -mx-1 px-1 hover:bg-muted/60 transition"
+              title="Editar nombre"
+              aria-label="Editar nombre"
+            >
+              {item.productName}
+            </button>
+          )}
           {isEditingQty && (
             <div className="mt-1 space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -1392,7 +1492,7 @@ const ListItemRow = memo(function ListItemRow({
             </div>
           )}
         </div>
-        {!isEditingQty && (
+        {!isEditingQty && !isEditingName && (
           <div className="flex items-center gap-0.5 shrink-0">
             {!item.notes && !isEditingNotes && (
               <Button
@@ -1504,7 +1604,7 @@ const ListItemRow = memo(function ListItemRow({
           </Button>
         </div>
       )}
-      {showCategory && !isEditingQty && !isEditingNotes && (
+      {showCategory && !isEditingQty && !isEditingNotes && !isEditingName && (
         <CategoryTag emoji={item.categoryEmoji} name={item.categoryName} />
       )}
     </Card>

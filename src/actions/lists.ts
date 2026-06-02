@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   stores,
@@ -99,6 +99,68 @@ export async function updateItemNotesAction(formData: FormData) {
     .set({ notes })
     .where(eq(shoppingListItems.id, id));
   revalidateListPaths();
+}
+
+export async function updateItemNameAction(formData: FormData) {
+  await requireAdmin();
+  const id = Number(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  if (!id) throw new Error("ID requerido");
+  if (!name) throw new Error("Nombre requerido");
+  if (name.length > 120) throw new Error("Nombre demasiado largo");
+  await requireEditableItem(id);
+
+  // Necesitamos el productId del ítem para decidir si tocamos el maestro.
+  const [item] = await db
+    .select({ productId: shoppingListItems.productId })
+    .from(shoppingListItems)
+    .where(eq(shoppingListItems.id, id))
+    .limit(1);
+  if (!item) throw new Error("Ítem no encontrado");
+
+  if (item.productId != null) {
+    // 1) Renombrar el maestro (es el que tiene la constraint UNIQUE). Si choca
+    //    con otro producto devolvemos un error claro y NO tocamos los snapshots.
+    //    Sin transacción (neon-http no las soporta): el maestro va primero para
+    //    abortar antes de sincronizar si el nombre está repetido.
+    try {
+      await db
+        .update(products)
+        .set({ name })
+        .where(eq(products.id, item.productId));
+    } catch (err) {
+      if ((err as { code?: string }).code === "23505") {
+        throw new Error("Ya existe un producto con ese nombre");
+      }
+      throw err;
+    }
+    // 2) Sincronizar el snapshot del nombre en los ítems de listas vigentes
+    //    (las archivadas son registros históricos y quedan intactas).
+    await db
+      .update(shoppingListItems)
+      .set({ productName: name })
+      .where(
+        and(
+          eq(shoppingListItems.productId, item.productId),
+          inArray(
+            shoppingListItems.listId,
+            db
+              .select({ id: shoppingLists.id })
+              .from(shoppingLists)
+              .where(ne(shoppingLists.status, "archived")),
+          ),
+        ),
+      );
+  } else {
+    // Ítem huérfano (producto borrado del maestro): renombramos sólo este snapshot.
+    await db
+      .update(shoppingListItems)
+      .set({ productName: name })
+      .where(eq(shoppingListItems.id, id));
+  }
+
+  revalidateListPaths();
+  revalidatePath("/admin/products");
 }
 
 export async function removeItemAction(formData: FormData) {
