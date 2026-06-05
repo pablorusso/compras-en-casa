@@ -69,6 +69,19 @@ import { cn } from "@/lib/utils";
 type EditorKind = "qty" | "notes" | "name";
 type ActiveEditor = { id: number; kind: EditorKind } | null;
 
+// Origen del alta de producto: el buscador sticky de arriba o un "+" inline en
+// el header de un comercio/categoría.
+type CreateSource = "search" | "inline";
+// Contexto con el que se abre el cajón de alta. Sus campos prellenan el
+// formulario (`initial*`): el alta por búsqueda trae el texto + filtros; el
+// alta inline trae el comercio/categoría de la sección donde está el usuario.
+type CreateContext = {
+  source: CreateSource;
+  name?: string;
+  storeId?: number;
+  categoryId?: number;
+} | null;
+
 // Producto del maestro que NO está en la lista. Trae los campos desnormalizados
 // completos para poder agruparlo/filtrarlo igual que un ítem de la lista.
 export type ExcludedProduct = {
@@ -437,7 +450,16 @@ export function ListEditor({
 
   const [, startAdd] = useTransition();
   const [qtyPopupItem, setQtyPopupItem] = useState<QuantityTarget | null>(null);
-  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  // Contexto del alta de producto. El cajón está abierto cuando es != null.
+  // `source` distingue el alta desde el buscador de arriba (que prellena con el
+  // texto/filtros y al cerrar vuelve el foco al buscador) del alta inline desde
+  // un header de comercio/categoría (que prellena con esa sección y al cerrar
+  // NO mueve el foco, para preservar el scroll donde estaba el usuario).
+  const [createContext, setCreateContext] = useState<CreateContext>(null);
+  // Espejo del `source` accesible desde `onCloseAutoFocus`: para entonces
+  // `createContext` ya puede ser null (lo limpia `onOpenChange` al cerrar), así
+  // que el ref conserva el origen del alta que se está cerrando.
+  const lastCreateSourceRef = useRef<CreateSource>("search");
 
   // Agrega un producto al hacer un match exitoso desde el buscador (Enter o
   // botón contextual). Abre el popup de cantidad apenas el server confirma el
@@ -496,7 +518,13 @@ export function ListEditor({
       ? computeAction(query)
       : { action: searchAction, primary: primaryItem };
     if (action === "idle" || action === "create") {
-      setCreateDrawerOpen(true);
+      lastCreateSourceRef.current = "search";
+      setCreateContext({
+        source: "search",
+        name: query.trim() || undefined,
+        storeId: storeFilter ? Number(storeFilter) : undefined,
+        categoryId: categoryFilter ? Number(categoryFilter) : undefined,
+      });
       return;
     }
     if (!primary) return;
@@ -566,6 +594,42 @@ export function ListEditor({
       return next;
     });
   }, []);
+
+  // Abre el alta inline desde un header de comercio/categoría: prellena el
+  // cajón con esa sección. Antes de abrir, expande la cadena destino (comercio
+  // y, si aplica, categoría) para que el producto recién creado quede a la
+  // vista al cerrar. Requiere un comercio real (la action lo exige).
+  const openInlineCreate = useCallback(
+    (
+      storeId: number | null,
+      sKey: string,
+      categoryId?: number | null,
+      cKey?: string,
+    ) => {
+      if (storeId == null) return;
+      setCollapsedStores((prev) => {
+        if (!prev.has(sKey)) return prev;
+        const next = new Set(prev);
+        next.delete(sKey);
+        return next;
+      });
+      if (cKey) {
+        setCollapsedCats((prev) => {
+          if (!prev.has(cKey)) return prev;
+          const next = new Set(prev);
+          next.delete(cKey);
+          return next;
+        });
+      }
+      lastCreateSourceRef.current = "inline";
+      setCreateContext({
+        source: "inline",
+        storeId,
+        categoryId: categoryId ?? undefined,
+      });
+    },
+    [],
+  );
 
   // Renderiza una lista de filas: incluidos primero, disponibles después (cada
   // grupo ya viene alfabético desde groupItems).
@@ -701,19 +765,22 @@ export function ListEditor({
         listId={list.id}
         stores={stores}
         categories={categories}
-        initialName={query.trim() || undefined}
-        initialStoreId={storeFilter ? Number(storeFilter) : undefined}
-        initialCategoryId={categoryFilter ? Number(categoryFilter) : undefined}
-        open={createDrawerOpen}
+        initialName={createContext?.name}
+        initialStoreId={createContext?.storeId}
+        initialCategoryId={createContext?.categoryId}
+        open={createContext !== null}
         onOpenChange={(open) => {
-          setCreateDrawerOpen(open);
+          if (!open) setCreateContext(null);
         }}
         onCloseAutoFocus={(e) => {
-          // Cancelamos la restauración default de Radix (que volvería al
-          // trigger anterior) y devolvemos el foco al buscador con todo el
-          // texto seleccionado para encadenar otra búsqueda.
+          // Cancelamos siempre la restauración default de Radix (que volvería al
+          // trigger/elemento anterior y podría scrollear). Sólo en el alta desde
+          // el buscador devolvemos el foco arriba con el texto seleccionado para
+          // encadenar otra búsqueda; en el alta inline NO movemos el foco, así el
+          // scroll queda donde estaba el usuario. Leemos el origen del ref porque
+          // `createContext` ya es null acá (lo limpió `onOpenChange`).
           e.preventDefault();
-          focusAndSelectSearch();
+          if (lastCreateSourceRef.current === "search") focusAndSelectSearch();
         }}
       />
       <QuantityEditDrawer
@@ -791,48 +858,69 @@ export function ListEditor({
                     searchActive ? "py-1" : "py-1.5",
                   )}
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggleStore(sKey)}
-                    aria-expanded={!storeCollapsed}
-                    className="group flex w-full min-w-0 items-center gap-2 rounded-xl -mx-1 px-1 py-0.5 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40 transition"
-                  >
-                    <ChevronDown
-                      className={cn(
-                        "size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform",
-                        storeCollapsed && "-rotate-90",
-                      )}
-                      aria-hidden
-                    />
-                    <SectionHeading
-                      title={store.storeName}
-                      size="sm"
-                      illustration={
-                        <div
-                          className={cn(
-                            "flex items-center justify-center rounded-xl ring-1",
-                            searchActive ? "size-6" : "size-8",
-                            style.tint,
-                            style.ring,
-                          )}
-                        >
-                          <span
-                            className={cn("leading-none", searchActive ? "text-base" : "text-xl")}
+                  <div className="group flex w-full items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleStore(sKey)}
+                      aria-expanded={!storeCollapsed}
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-xl -mx-1 px-1 py-0.5 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-primary/40 transition"
+                    >
+                      <ChevronDown
+                        className={cn(
+                          "size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform",
+                          storeCollapsed && "-rotate-90",
+                        )}
+                        aria-hidden
+                      />
+                      <SectionHeading
+                        title={store.storeName}
+                        size="sm"
+                        illustration={
+                          <div
+                            className={cn(
+                              "flex items-center justify-center rounded-xl ring-1",
+                              searchActive ? "size-6" : "size-8",
+                              style.tint,
+                              style.ring,
+                            )}
                           >
-                            {store.storeEmoji}
-                          </span>
-                        </div>
-                      }
-                      meta={
-                        searchActive ? undefined : (
-                          <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">
-                            {storeCount} {storeCount === 1 ? "producto" : "productos"}
-                          </span>
-                        )
-                      }
-                      className="flex-1"
-                    />
-                  </button>
+                            <span
+                              className={cn("leading-none", searchActive ? "text-base" : "text-xl")}
+                            >
+                              {store.storeEmoji}
+                            </span>
+                          </div>
+                        }
+                        meta={
+                          searchActive ? undefined : (
+                            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-primary">
+                              {storeCount} {storeCount === 1 ? "producto" : "productos"}
+                            </span>
+                          )
+                        }
+                        className="flex-1"
+                      />
+                    </button>
+                    {/* Alta inline: prellena el comercio (categoría libre / la
+                        sugiere la IA). En touch siempre visible; en escritorio
+                        aparece al hover/focus del header. No en búsqueda (las
+                        categorías se aplanan) ni en comercios sintéticos. */}
+                    {!searchActive && store.storeId != null && (
+                      <button
+                        type="button"
+                        onClick={() => openInlineCreate(store.storeId, sKey)}
+                        aria-label={`Crear producto en ${store.storeName}`}
+                        title={`Crear producto en ${store.storeName}`}
+                        className={cn(
+                          "flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/40",
+                          !isTouch &&
+                            "opacity-0 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100",
+                        )}
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {store.storeAddress && !storeCollapsed && (
                   <p className="mt-2 mb-3 ml-[60px] flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -861,23 +949,45 @@ export function ListEditor({
                             : collapsedCats.has(cKey);
                           return (
                             <div key={`cat-${cat.categoryId ?? cat.categoryName}`}>
-                              <button
-                                type="button"
-                                onClick={() => toggleCat(cKey)}
-                                aria-expanded={!catCollapsed}
-                                className="flex w-full items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold mb-2 pl-1 outline-none focus-visible:text-foreground transition"
-                              >
-                                {catCollapsed ? (
-                                  <ChevronRight className="size-3 shrink-0" aria-hidden />
-                                ) : (
-                                  <ChevronDown className="size-3 shrink-0" aria-hidden />
+                              <div className="group/cat mb-2 flex w-full items-center gap-1.5 pl-1">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCat(cKey)}
+                                  aria-expanded={!catCollapsed}
+                                  className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-semibold text-left outline-none focus-visible:text-foreground transition"
+                                >
+                                  {catCollapsed ? (
+                                    <ChevronRight className="size-3 shrink-0" aria-hidden />
+                                  ) : (
+                                    <ChevronDown className="size-3 shrink-0" aria-hidden />
+                                  )}
+                                  <span className="text-base">{cat.categoryEmoji}</span>
+                                  <span>{cat.categoryName}</span>
+                                  <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
+                                    ({cat.items.length})
+                                  </span>
+                                </button>
+                                {/* Alta inline: prellena comercio + esta
+                                    categoría. Mismo patrón de visibilidad que el
+                                    "+" del comercio, en versión chica. */}
+                                {cat.categoryId != null && store.storeId != null && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openInlineCreate(store.storeId, sKey, cat.categoryId, cKey)
+                                    }
+                                    aria-label={`Crear producto en ${cat.categoryName}`}
+                                    title={`Crear producto en ${cat.categoryName}`}
+                                    className={cn(
+                                      "flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/40",
+                                      !isTouch &&
+                                        "opacity-0 focus-visible:opacity-100 group-hover/cat:opacity-100 group-focus-within/cat:opacity-100",
+                                    )}
+                                  >
+                                    <Plus className="size-3.5" />
+                                  </button>
                                 )}
-                                <span className="text-base">{cat.categoryEmoji}</span>
-                                <span>{cat.categoryName}</span>
-                                <span className="ml-1 normal-case tracking-normal text-muted-foreground/70 font-normal">
-                                  ({cat.items.length})
-                                </span>
-                              </button>
+                              </div>
                               {!catCollapsed && renderRows(cat.items)}
                             </div>
                           );
