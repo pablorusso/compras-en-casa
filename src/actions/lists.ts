@@ -9,7 +9,6 @@ import {
   shoppingListItems,
   shoppingLists,
   categories,
-  settings,
   shareLinks,
 } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
@@ -17,7 +16,7 @@ import {
   cloneListToCurrent,
   createListFromMaster,
 } from "@/lib/lists";
-import { createShareLink } from "@/lib/share";
+import { createShareLinkForList } from "@/lib/share";
 import { canonicalize } from "@/lib/units";
 import { resolveAutoCategoryId } from "@/lib/classify";
 import { parseProductFlags } from "@/lib/product-form";
@@ -307,9 +306,7 @@ export async function createShareLinkAction(formData: FormData) {
   const listId = Number(formData.get("listId"));
   if (!listId) throw new Error("Lista inválida");
   await requireEditableList(listId);
-  const [cfg] = await db.select().from(settings).where(eq(settings.id, 1)).limit(1);
-  const ttlDays = cfg?.shareLinkTtlDays ?? 30;
-  const link = await createShareLink(listId, ttlDays * 24);
+  const link = await createShareLinkForList(listId);
   revalidatePath("/admin/list");
   revalidatePath("/admin");
   return { token: link.token, expiresAt: link.expiresAt.toISOString() };

@@ -1,9 +1,10 @@
 import { nanoid } from "nanoid";
 import { and, desc, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
-import { shareLinks, shoppingLists } from "@/db/schema";
+import { settings, shareLinks, shoppingLists } from "@/db/schema";
 
 const DEFAULT_TTL_HOURS = 24;
+const DEFAULT_TTL_DAYS = 30;
 
 export async function createShareLink(listId: number, ttlHours = DEFAULT_TTL_HOURS) {
   const token = nanoid(24);
@@ -13,6 +14,22 @@ export async function createShareLink(listId: number, ttlHours = DEFAULT_TTL_HOU
     .values({ listId, token, expiresAt })
     .returning();
   return row;
+}
+
+/** Días de vigencia configurados para los share-links (default 30). */
+export async function getShareLinkTtlDays(): Promise<number> {
+  const [cfg] = await db
+    .select({ ttl: settings.shareLinkTtlDays })
+    .from(settings)
+    .where(eq(settings.id, 1))
+    .limit(1);
+  return cfg?.ttl ?? DEFAULT_TTL_DAYS;
+}
+
+/** Crea un share-link para `listId` usando el TTL configurado en settings. */
+export async function createShareLinkForList(listId: number) {
+  const ttlDays = await getShareLinkTtlDays();
+  return createShareLink(listId, ttlDays * 24);
 }
 
 export async function resolveShareLink(token: string) {

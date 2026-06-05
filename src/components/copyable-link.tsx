@@ -10,10 +10,12 @@ export function CopyableLinkRow({
   url,
   external = true,
   highlight = false,
+  label,
 }: {
   url: string;
   external?: boolean;
   highlight?: boolean;
+  label?: string;
 }) {
   async function copy() {
     try {
@@ -29,6 +31,11 @@ export function CopyableLinkRow({
 
   return (
     <div className="flex items-center gap-2">
+      {label && (
+        <span className="shrink-0 w-16 text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+      )}
       <code
         className={cn(
           "flex-1 truncate text-xs px-2 py-1.5 rounded",

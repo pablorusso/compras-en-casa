@@ -12,6 +12,7 @@ import {
 import { isInSeason } from "./seasonality";
 import { getSuggestedQuantities } from "./quantities";
 import { formatListDateName, getNextShoppingDate } from "./format";
+import { createShareLinkForList } from "./share";
 
 export async function getCurrentList() {
   const [current] = await db
@@ -136,6 +137,7 @@ export async function createListFromMaster(now: Date = new Date()) {
   }
 
   await pruneHistory();
+  await createShareLinkForList(list.id);
   return list;
 }
 
@@ -192,6 +194,7 @@ export async function cloneListToCurrent(
   }
 
   await pruneHistory();
+  await createShareLinkForList(created.id);
   return created;
 }
 

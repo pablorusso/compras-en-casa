@@ -97,8 +97,8 @@ export function ShareLinkSection({
       {info ? (
         <div className="rounded-xl border bg-card p-3">
           <div className="space-y-2">
-            <CopyableLinkRow url={url} highlight />
-            <CopyableLinkRow url={jsonUrl} />
+            <CopyableLinkRow url={url} label="Comprar:" highlight />
+            <CopyableLinkRow url={jsonUrl} label="Calcular:" />
           </div>
           {expiresLabel && (
             <div className="mt-2 pt-2 border-t">
